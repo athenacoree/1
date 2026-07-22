@@ -1,0 +1,55 @@
+market_research_task:
+  description: >
+    Analyze the market opportunity for {company_name} ({company_url}).
+    Review the company information: {homepage_summary} and internal page details: {internal_pages_text}.
+    Assess the external web insights gathered: {market_and_funding_insights}.
+    Identify the market sector, estimated TAM, SAM, SOM, maturity stage, key growth drivers, and any regulatory issues.
+  expected_output: >
+    A structured report (800-1000 words) defining the market opportunity, sizing (TAM/SAM/SOM), sector macro trends, and regulatory considerations for the startup.
+  agent: market_research_specialist
+
+competitive_intelligence_task:
+  description: >
+    Assess the competitive space for {company_name} ({company_url}).
+    Examine competitor insights from search: {competitor_insights}.
+    Identify direct and indirect competitors. Outline the startup's unique value proposition, positioning strategy, features compared to industry standard, and possible market entry gaps.
+  expected_output: >
+    A detailed competitor profile and positioning matrix comparing {company_name} with at least 3-4 key industry competitors, highlighting competitive moats and market gaps.
+  agent: competitive_intelligence_analyst
+
+customer_insights_task:
+  description: >
+    Evaluate the customer segments, pain points, and acquisition channels for {company_name}.
+    Analyze pricing/product reviews and customer feedback trends: {pricing_and_product_insights}.
+    Formulate the primary and secondary buyer personas, core user needs solved, customer journey, and strategic growth recommendations.
+  expected_output: >
+    A detailed customer profiles report, mapping key user pain points, purchase drivers, and estimated customer acquisition strategies.
+  agent: customer_insights_researcher
+
+product_strategy_task:
+  description: >
+    Evaluate the product architecture, key features, and development feasibility for {company_name}.
+    Use the homepage description: {homepage_summary} and internal pricing/product details: {pricing_and_product_insights}.
+    Analyze MVP feature scope, unique technical differentiators, and possible technical risks or scalability challenges.
+  expected_output: >
+    A technical and product strategy assessment outlining feature prioritization, technological risks, and scalability milestones.
+  agent: product_strategy_advisor
+
+business_analyst_task:
+  description: >
+    Synthesize all prior reports into a professional VC Due Diligence Investment Memo for {company_name}.
+    Use the team/founders research insights: {team_and_founders_insights} to evaluate the leadership.
+    Your report MUST start with two distinct keys at the very top for UI parsing:
+    "INVESTMENT_SCORE: [0-100]"
+    "RECOMMENDATION: [GO / CONDITIONAL / NO-GO]"
+
+    Structure the report with:
+    - Executive Summary
+    - Investment Thesis & Core Strengths
+    - Risk Scoring Explanation
+    - Deep Dive: Market, Competition, Team, Product, Financials/Pricing
+    - Risk Mitigation Framework
+    - Final Actionable Recommendation
+  expected_output: >
+    A comprehensive, professional investment memo starting with 'INVESTMENT_SCORE: XX' and 'RECOMMENDATION: YY', followed by a deep-dive analysis of market, product, competition, team, financials, risk matrix, and strategic next steps.
+  agent: business_analyst
