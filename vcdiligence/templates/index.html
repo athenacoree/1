@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DealScout AI — VC Due Diligence Agent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs" defer></script>
+    <link href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['SF Pro Display', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #030712;
+            background-image:
+                radial-gradient(at 0% 0%, rgba(6, 182, 212, 0.15) 0, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.12) 0, transparent 50%);
+            background-attachment: fixed;
+        }
+        .glass {
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-premium {
+            background: rgba(30, 41, 59, 0.65);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+        .text-glow-cyan {
+            text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+        }
+        .text-glow-emerald {
+            text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+        }
+    </style>
+</head>
+<body class="text-slate-100 min-h-screen flex flex-col font-sans selection:bg-cyan-500 selection:text-slate-900">
+
+    <header class="w-full max-w-6xl mx-auto px-6 py-6 flex justify-between items-center z-10">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-emerald-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                <span class="text-slate-950 font-bold text-xl tracking-tighter">DS</span>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg tracking-tight bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">DealScout AI</h1>
+                <p class="text-xs text-slate-400">Autonomous VC Due Diligence</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-4">
+            <span class="text-xs text-slate-400 flex items-center bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-full backdrop-blur-md">
+                <span class="w-2 h-2 rounded-full bg-cyan-400 mr-2 animate-pulse"></span>
+                <span>Active LLM Mode: <strong class="text-cyan-400">Multi-Provider</strong></span>
+            </span>
+        </div>
+    </header>
+
+    <main class="flex-grow w-full max-w-5xl mx-auto px-6 py-8 z-10 flex flex-col items-center justify-center" x-data="{
+        startupUrl: '',
+        isLoading: false,
+        taskId: '',
+        statusMessage: '',
+        progressPercent: 0,
+        showResult: false,
+        activeTab: 'executive',
+        resultData: null,
+        llmUsed: '',
+        errorMessage: '',
+        pollInterval: null,
+
+        async triggerAnalysis(urlToScan) {
+            this.errorMessage = '';
+            this.isLoading = true;
+            this.showResult = false;
+            this.statusMessage = 'Initializing DealScout AI network...';
+            this.progressPercent = 5;
+            this.startupUrl = urlToScan || this.startupUrl;
+
+            if (!this.startupUrl) {
+                this.errorMessage = 'Please enter a valid URL or click a demo startup.';
+                this.isLoading = false;
+                return;
+            }
+
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: this.startupUrl })
+                });
+
+                const data = await response.json();
+                if (response.status !== 200) {
+                    throw new Error(data.detail || 'Failed to start analysis');
+                }
+
+                this.taskId = data.task_id;
+
+                if (data.status === 'completed') {
+                    await this.fetchCompletedResult();
+                } else {
+                    this.startPolling();
+                }
+            } catch (err) {
+                this.errorMessage = err.message || 'An unexpected error occurred.';
+                this.isLoading = false;
+            }
+        },
+
+        startPolling() {
+            if (this.pollInterval) clearInterval(this.pollInterval);
+            this.pollInterval = setInterval(async () => {
+                try {
+                    const res = await fetch(`/status/${this.taskId}`);
+                    const data = await res.json();
+
+                    this.statusMessage = data.message;
+                    this.progressPercent = data.progress;
+
+                    if (data.status === 'completed') {
+                        clearInterval(this.pollInterval);
+                        this.resultData = data.result;
+                        this.llmUsed = data.result.llm_provider || 'OpenRouter';
+                        this.isLoading = false;
+                        this.showResult = true;
+                    } else if (data.status === 'failed') {
+                        clearInterval(this.pollInterval);
+                        this.errorMessage = data.message;
+                        this.isLoading = false;
+                    }
+                } catch (err) {
+                    clearInterval(this.pollInterval);
+                    this.errorMessage = 'Connection interrupted. Please try again.';
+                    this.isLoading = false;
+                }
+            }, 3000);
+        },
+
+        async fetchCompletedResult() {
+            try {
+                const res = await fetch(`/status/${this.taskId}`);
+                const data = await res.json();
+                this.resultData = data.result;
+                this.llmUsed = data.result.llm_provider || 'OpenRouter';
+                this.progressPercent = 100;
+                this.isLoading = false;
+                this.showResult = true;
+            } catch (err) {
+                this.errorMessage = 'Failed to load completed report.';
+                this.isLoading = false;
+            }
+        }
+    }">
+
+        <div class="w-full text-center max-w-2xl mb-12" x-show="!isLoading && !showResult">
+            <h2 class="text-4xl sm:text-5xl font-extrabold tracking-tight mb-4">
+                Automated <span class="bg-gradient-to-r from-cyan-400 via-teal-400 to-emerald-400 bg-clip-text text-transparent">VC Due Diligence</span> in minutes.
+            </h2>
+            <p class="text-slate-400 text-lg sm:text-xl font-light mb-8">
+                Paste any startup URL. Our coordinated network of AI specialists will extract market data, team profiles, metrics, and generate an institutional investment memo with a risk score.
+            </p>
+        </div>
+
+        <div class="w-full max-w-2xl" x-show="!isLoading && !showResult">
+            <div class="glass p-8 rounded-3xl shadow-2xl relative overflow-hidden">
+                <div class="absolute -top-24 -left-24 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl"></div>
+                <div class="absolute -bottom-24 -right-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl"></div>
+
+                <div class="space-y-4">
+                    <label class="block text-sm font-medium text-slate-300">Enter Startup Web URL</label>
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <input type="text" x-model="startupUrl" placeholder="e.g. https://stripe.com"
+                            class="flex-grow px-5 py-4 rounded-2xl bg-slate-900/80 border border-slate-800 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 text-slate-100 placeholder-slate-500 outline-none transition-all">
+                        <button @click="triggerAnalysis()"
+                            class="px-8 py-4 rounded-2xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold transition-all shadow-lg shadow-cyan-500/10 transform active:scale-[0.98]">
+                            Analyze
+                        </button>
+                    </div>
+
+                    <div x-show="errorMessage" class="p-4 bg-red-950/40 border border-red-900/50 rounded-2xl text-red-400 text-sm" x-text="errorMessage" style="display: none;"></div>
+
+                    <div class="pt-6 border-t border-slate-900 flex flex-col items-center">
+                        <span class="text-xs text-slate-500 font-medium uppercase tracking-wider mb-3">Quick Demo (Pre-loaded cached report)</span>
+                        <div class="flex flex-wrap justify-center gap-2">
+                            <button @click="triggerAnalysis('stripe.com')"
+                                class="px-4 py-2 rounded-full glass hover:bg-slate-800 text-xs font-semibold text-cyan-400 border border-cyan-500/20 transition-all flex items-center space-x-1.5">
+                                <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+                                <span>stripe.com</span>
+                            </button>
+                            <button @click="triggerAnalysis('vcdiligence.com')"
+                                class="px-4 py-2 rounded-full glass hover:bg-slate-800 text-xs font-semibold text-emerald-400 border border-emerald-500/20 transition-all flex items-center space-x-1.5">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                <span>vcdiligence.com</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="w-full max-w-lg" x-show="isLoading" style="display: none;">
+            <div class="glass p-8 rounded-3xl text-center shadow-2xl relative overflow-hidden">
+                <div class="w-20 h-20 mx-auto mb-6 relative">
+                    <svg class="animate-spin w-full h-full text-cyan-500" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <div class="absolute inset-0 flex items-center justify-center font-bold text-sm text-slate-400" x-text="progressPercent + '%'"></div>
+                </div>
+
+                <h3 class="text-xl font-bold mb-2 bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">Analyzing Startup</h3>
+                <p class="text-slate-400 text-sm mb-6" x-text="statusMessage"></p>
+
+                <div class="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                    <div class="bg-gradient-to-r from-cyan-500 to-emerald-500 h-full transition-all duration-500" :style="'width: ' + progressPercent + '%'"></div>
+                </div>
+
+                <p class="text-xs text-slate-500 mt-4">This process can take up to 2-3 minutes. Please do not close this tab.</p>
+            </div>
+        </div>
+
+        <div class="w-full" x-show="showResult" style="display: none;">
+            <div class="flex flex-col lg:flex-row gap-8 items-start">
+
+                <div class="w-full lg:w-1/3 flex flex-col space-y-6">
+                    <div class="glass-premium p-6 rounded-3xl text-center relative overflow-hidden">
+                        <div class="flex justify-between items-center mb-6">
+                            <span class="text-xs font-semibold uppercase text-slate-400 tracking-wider">Startup Profile</span>
+                            <span class="px-2.5 py-1 rounded-md bg-slate-900 text-[10px] text-cyan-400 border border-cyan-400/20" x-text="llmUsed"></span>
+                        </div>
+
+                        <h2 class="text-3xl font-black tracking-tight text-white mb-1" x-text="resultData ? resultData.company_name : ''"></h2>
+                        <a :href="resultData ? resultData.company_url : '#'" target="_blank"
+                            class="text-xs text-slate-400 hover:text-cyan-400 transition-all flex items-center justify-center space-x-1.5 mb-6">
+                            <span x-text="resultData ? resultData.company_url : ''"></span>
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"></path>
+                            </svg>
+                        </a>
+
+                        <div class="w-36 h-36 mx-auto mb-6 relative">
+                            <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                                <path class="text-slate-800" stroke-width="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
+                                <path class="text-emerald-500" stroke-dasharray="100, 100" stroke-width="3.2" stroke-linecap="round" stroke="currentColor" fill="none"
+                                    :stroke-dasharray="(resultData ? resultData.score : 0) + ', 100'"
+                                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
+                            </svg>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                <span class="text-4xl font-extrabold text-white" x-text="resultData ? resultData.score : 0"></span>
+                                <span class="text-[9px] text-slate-400 uppercase tracking-widest font-semibold">Deal Score</span>
+                            </div>
+                        </div>
+
+                        <div class="px-4 py-3 rounded-2xl bg-slate-900/60 border border-slate-800 flex justify-between items-center mb-4">
+                            <span class="text-xs text-slate-400 font-medium">Recommendation</span>
+                            <span class="text-xs font-bold px-3 py-1 rounded-full uppercase"
+                                :class="{
+                                    'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20': resultData && resultData.recommendation === 'GO',
+                                    'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20': resultData && resultData.recommendation === 'CONDITIONAL',
+                                    'bg-red-500/10 text-red-400 border border-red-500/20': resultData && resultData.recommendation === 'NO-GO'
+                                }"
+                                x-text="resultData ? resultData.recommendation : ''">
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="glass p-4 rounded-2xl">
+                        <button @click="showResult = false"
+                            class="w-full py-3.5 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-xs font-bold tracking-wide uppercase transition-all flex items-center justify-center space-x-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"></path>
+                            </svg>
+                            <span>Analyze Another URL</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="w-full lg:w-2/3">
+                    <div class="glass-premium rounded-3xl overflow-hidden flex flex-col min-h-[500px]">
+                        <div class="flex overflow-x-auto border-b border-slate-800/80 bg-slate-950/40">
+                            <button @click="activeTab = 'executive'"
+                                class="px-6 py-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all whitespace-nowrap outline-none"
+                                :class="activeTab === 'executive' ? 'border-cyan-500 text-cyan-400 bg-slate-900/20' : 'border-transparent text-slate-400 hover:text-slate-100'">
+                                Summary
+                            </button>
+                            <button @click="activeTab = 'report'"
+                                class="px-6 py-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all whitespace-nowrap outline-none"
+                                :class="activeTab === 'report' ? 'border-cyan-500 text-cyan-400 bg-slate-900/20' : 'border-transparent text-slate-400 hover:text-slate-100'">
+                                Due Diligence Memo
+                            </button>
+                        </div>
+
+                        <div class="p-8 flex-grow">
+                            <div x-show="activeTab === 'executive'" class="space-y-6">
+                                <h3 class="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">Executive Evaluation</h3>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div class="p-5 rounded-2xl glass bg-slate-950/20 flex flex-col justify-between">
+                                        <span class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Deal Conviction</span>
+                                        <div class="text-3xl font-black text-white" x-text="resultData && resultData.score >= 90 ? 'High' : (resultData && resultData.score >= 75 ? 'Moderate' : 'Speculative')"></div>
+                                        <p class="text-xs text-slate-400 mt-2">Determined by market size, competitive gaps, and operational metrics.</p>
+                                    </div>
+                                    <div class="p-5 rounded-2xl glass bg-slate-950/20 flex flex-col justify-between">
+                                        <span class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Moat Evaluation</span>
+                                        <div class="text-3xl font-black text-white" x-text="resultData && resultData.score >= 90 ? 'Outstanding' : 'Defensible'"></div>
+                                        <p class="text-xs text-slate-400 mt-2">Proprietary logic, switching costs, or developer integrations.</p>
+                                    </div>
+                                </div>
+                                <div class="p-6 rounded-2xl glass bg-slate-950/20 space-y-3">
+                                    <h4 class="text-sm font-bold text-cyan-400 uppercase tracking-wide">Analyst's Core Thesis</h4>
+                                    <p class="text-sm text-slate-300 leading-relaxed">
+                                        The company displays strong market potential driven by modern architectural requirements. High developer alignment creates switching costs and strong network growth potential. Read the deep-dive report for detailed operational risk matrices.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div x-show="activeTab === 'report'" class="space-y-6">
+                                <div class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed space-y-4 whitespace-pre-wrap select-text" x-text="resultData ? resultData.report_md : ''"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+
+    <footer class="w-full border-t border-slate-900 bg-slate-950/80 backdrop-blur-md py-6 text-center z-10 text-xs text-slate-500">
+        <div class="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div>
+                &copy; 2026 DealScout AI. All rights reserved. Proprietary Venture Intelligence.
+            </div>
+            <div class="flex space-x-4">
+                <a href="#" class="hover:text-slate-300 transition-all">Privacy</a>
+                <a href="#" class="hover:text-slate-300 transition-all">Terms</a>
+                <a href="#" class="hover:text-slate-300 transition-all">API Docs</a>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>
