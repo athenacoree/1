@@ -1,0 +1,61 @@
+{
+  "company_name": "Example",
+  "company_url": "https://example.com",
+  "homepage_summary": "Example DomainExample DomainThis domain is for use in documentation examples without needing permission. Avoid use in operations.Learn more",
+  "internal_pages": {
+    "/pricing-missing-page": "[Could not verify pricing details: no dedicated /pricing page found or loaded]",
+    "/team-missing-page": "[Could not verify team details: no dedicated /team page found or loaded]",
+    "/about-missing-page": "[Could not verify about details: no dedicated /about page found or loaded]",
+    "/features-missing-page": "[Could not verify features details: no dedicated /features page found or loaded]"
+  },
+  "search_insights": {
+    "competitors": [
+      {
+        "title": "EXAMPLE Definition & Meaning - Merriam-Webster",
+        "link": "https://www.merriam-webster.com/dictionary/example",
+        "snippet": "2 days ago · The meaning of EXAMPLE is a person or way of behaving that serves as a pattern to be imitated or not to be imitated. How to use example in a sentence. Synonym Discussion of Example."
+      },
+      {
+        "title": "EXAMPLE | English meaning - Cambridge Dictionary",
+        "link": "https://dictionary.cambridge.org/dictionary/english/example",
+        "snippet": "EXAMPLE definition: 1. something that is typical of the group of things that it is a member of: 2. a way of helping…. Learn more."
+      },
+      {
+        "title": "EXAMPLE Synonyms: 20 Similar Words - Merriam-Webster",
+        "link": "https://www.merriam-webster.com/thesaurus/example",
+        "snippet": "2 days ago · Some common synonyms of example are case, illustration, instance, sample, and specimen. While all these words mean \"something that exhibits distinguishing characteristics in its category,\" …"
+      }
+    ],
+    "team_and_founders": [
+      {
+        "title": "No public search results",
+        "link": "",
+        "snippet": "[No public search records found under specific query: Example founders team LinkedIn]"
+      }
+    ],
+    "market_and_funding": [
+      {
+        "title": "No public search results",
+        "link": "",
+        "snippet": "[No public search records found under specific query: Example Crunchbase funding traction]"
+      }
+    ],
+    "pricing_and_product": [
+      {
+        "title": "EXAMPLE Definition & Meaning - Merriam-Webster",
+        "link": "https://www.merriam-webster.com/dictionary/example",
+        "snippet": "2 days ago · The meaning of EXAMPLE is a person or way of behaving that serves as a pattern to be imitated or not to be imitated. …"
+      },
+      {
+        "title": "EXAMPLE | English meaning - Cambridge Dictionary",
+        "link": "https://dictionary.cambridge.org/dictionary/english/example",
+        "snippet": "EXAMPLE definition: 1. something that is typical of the group of things that it is a member of: 2. a way of helping…. Learn more."
+      },
+      {
+        "title": "EXAMPLE Synonyms: 20 Similar Words - Merriam-Webster",
+        "link": "https://www.merriam-webster.com/thesaurus/example",
+        "snippet": "2 days ago · Some common synonyms of example are case, illustration, instance, sample, and specimen. While all these words …"
+      }
+    ]
+  }
+}

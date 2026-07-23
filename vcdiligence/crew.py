@@ -52,6 +52,14 @@ class MarketResearchCrew():
         )
 
     @agent
+    def omission_analyst(self) -> Agent:
+        return Agent(
+            config=self.agents_config["omission_analyst"],
+            llm=self.llm,
+            verbose=True
+        )
+
+    @agent
     def business_analyst(self) -> Agent:
         return Agent(
             config=self.agents_config["business_analyst"],
@@ -84,6 +92,12 @@ class MarketResearchCrew():
         )
 
     @task
+    def omission_analyst_task(self) -> Task:
+        return Task(
+            config=self.tasks_config["omission_analyst_task"]
+        )
+
+    @task
     def business_analyst_task(self) -> Task:
         return Task(
             config=self.tasks_config["business_analyst_task"]
@@ -97,6 +111,7 @@ class MarketResearchCrew():
                 self.competitive_intelligence_analyst(),
                 self.customer_insights_researcher(),
                 self.product_strategy_advisor(),
+                self.omission_analyst(),
                 self.business_analyst()
             ],
             tasks=[
@@ -104,6 +119,7 @@ class MarketResearchCrew():
                 self.competitive_intelligence_task(),
                 self.customer_insights_task(),
                 self.product_strategy_task(),
+                self.omission_analyst_task(),
                 self.business_analyst_task()
             ],
             process=Process.sequential,

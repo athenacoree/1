@@ -35,21 +35,40 @@ product_strategy_task:
     A technical and product strategy assessment outlining feature prioritization, technological risks, and scalability milestones.
   agent: product_strategy_advisor
 
+omission_analyst_task:
+  description: >
+    Analyze what information is missing from the scraped content of {company_name} ({company_url}).
+    Examine the homepage summary: {homepage_summary} and internal page text: {internal_pages_text}.
+    Compare these against standard expectations for the startup's industry/stage (e.g. SaaS B2B, fintech, marketplace), identifying missing critical elements like concrete pricing structure, founder bios, business metrics (CAC, LTV, churn), social proof, or licensing/compliance.
+
+    Calculate and analyze the density of vague language/superlatives (e.g. "revolutionary", "game-changing", "market leader", "world-class") compared to the density of concrete figures and metrics.
+
+    Format your findings under a new section titled "Señales por Ausencia" (Signals by Absence).
+    For each omission, explain:
+    1. What is missing.
+    2. Why it matters for this sector/stage.
+    3. State clearly that this is a signal to investigate, not a definitive conclusion.
+  expected_output: >
+    A detailed section "Señales por Ausencia" listing detected omissions, their significance, language vagueness vs concrete metrics analysis, and a clear warning note.
+  agent: omission_analyst
+
 business_analyst_task:
   description: >
     Synthesize all prior reports into a professional VC Due Diligence Investment Memo for {company_name}.
     Use the team/founders research insights: {team_and_founders_insights} to evaluate the leadership.
-    Your report MUST start with two distinct keys at the very top for UI parsing:
+    Your report MUST start with exactly three distinct lines at the very top for UI parsing:
     "INVESTMENT_SCORE: [0-100]"
     "RECOMMENDATION: [GO / CONDITIONAL / NO-GO]"
+    "SUB_SCORES: {{\"market\": [0-100], \"team\": [0-100], \"product\": [0-100], \"traction\": [0-100], \"risk_legal_omissions\": [0-100]}}"
 
     Structure the report with:
     - Executive Summary
     - Investment Thesis & Core Strengths
-    - Risk Scoring Explanation
+    - Risk Scoring Explanation (explain why the overall score and sub-scores are given, referencing the sub-scores)
     - Deep Dive: Market, Competition, Team, Product, Financials/Pricing
+    - Señales por Ausencia (synthesize the Omission Analyst's entire section here)
     - Risk Mitigation Framework
     - Final Actionable Recommendation
   expected_output: >
-    A comprehensive, professional investment memo starting with 'INVESTMENT_SCORE: XX' and 'RECOMMENDATION: YY', followed by a deep-dive analysis of market, product, competition, team, financials, risk matrix, and strategic next steps.
+    A comprehensive, professional investment memo starting with 'INVESTMENT_SCORE: XX', 'RECOMMENDATION: YY', and 'SUB_SCORES: ZZ' followed by a deep-dive analysis of market, product, competition, team, financials, the 'Señales por Ausencia' section, risk matrix, sub-scores breakdown, and strategic next steps.
   agent: business_analyst
