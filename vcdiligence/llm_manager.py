@@ -35,6 +35,7 @@ class LLMProviderManager:
                 errors.append(f"{provider}: {str(e)}")
                 continue
 
+        # Try to find any available key
         for provider in ["openrouter", "grok", "openai"]:
             if provider == "openrouter" and os.getenv("API_KEY_OPENROUTER"):
                 model = os.getenv("MODEL_OPENROUTER", "meta-llama/llama-3.3-70b-instruct")
@@ -46,4 +47,8 @@ class LLMProviderManager:
                 model = os.getenv("MODEL_OPENAI", "gpt-4o-mini")
                 return LLM(model=f"openai/{model}", api_key=os.getenv("API_KEY_OPENAI")), "openai"
 
-        return LLM(model="openai/gpt-4o-mini", api_key="dummy_key"), "openai (demo mode)"
+        # Explicitly fail if no valid API key is present anywhere. Never return a fake/dummy demo key silently!
+        raise ValueError(
+            "No API key found for any of the supported LLM providers (OpenRouter, Grok, OpenAI). "
+            "Please configure the appropriate environment variable (API_KEY_OPENROUTER, API_KEY_GROK, or API_KEY_OPENAI) in your environment or .env file."
+        )
