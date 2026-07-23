@@ -13,7 +13,10 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 # Local imports
-from vcdiligence.database import init_db, get_db, SessionLocal, User, Organization, Report, Task, AuditLog
+from vcdiligence.database import (
+    init_db, get_db, SessionLocal, User, Organization, Report, Task, AuditLog,
+    ReportChange, Decision, PrecisionBenchmark
+)
 from vcdiligence.security import hash_password, verify_password, create_access_token
 from vcdiligence.auth import get_current_user, require_admin
 from vcdiligence.validator import validate_url_for_ssrf, check_rate_limit
@@ -23,6 +26,7 @@ from vcdiligence.parser import parse_report_meta
 from vcdiligence.public_apis import get_all_public_insights
 from vcdiligence.pdf_generator import generate_report_pdf
 from vcdiligence.crew import MarketResearchCrew
+from vcdiligence.tasks import run_due_diligence_task
 
 app = FastAPI(title="DealScout AI — Enterprise Due Diligence")
 
@@ -44,22 +48,34 @@ def global_exception_handler(request, exc):
         content={"detail": "An internal server error occurred. Please contact system administrator."}
     )
 
-# Cleanup hung/active tasks on startup
+# Cleanup hung/active tasks on startup & start Scheduler
 @app.on_event("startup")
 def on_startup():
     init_db()
     db = SessionLocal()
     try:
-        # If any task was in starting, scraping or analyzing state when server restarted, set it to failed
-        hung_tasks = db.query(Task).filter(Task.status.in_(["starting", "scraping", "analyzing"])).all()
-        for t in hung_tasks:
-            t.status = "failed"
-            t.message = "Task interrupted due to server reboot. Please try running again."
-        db.commit()
-        if hung_tasks:
-            logger.info(f"Reset {len(hung_tasks)} hung tasks to failed status on startup.")
+        from vcdiligence.celery_app import celery_app
+        # Only cleanup hung tasks on server startup if we are running in synchronous eager mode
+        if celery_app.conf.task_always_eager:
+            hung_tasks = db.query(Task).filter(Task.status.in_(["starting", "scraping", "analyzing"])).all()
+            for t in hung_tasks:
+                t.status = "failed"
+                t.message = "Task interrupted due to server reboot. Please try running again."
+            db.commit()
+            if hung_tasks:
+                logger.info(f"Reset {len(hung_tasks)} hung tasks to failed status on startup.")
+
+        # Start APScheduler for background continuous monitoring
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from vcdiligence.monitoring import run_continuous_monitoring_job
+
+        scheduler = BackgroundScheduler()
+        interval_hours = int(os.getenv("MONITORING_JOB_INTERVAL_HOURS", "24"))
+        scheduler.add_job(run_continuous_monitoring_job, "interval", hours=interval_hours, id="continuous_monitoring")
+        scheduler.start()
+        logger.info(f"APScheduler started. Configured monitoring job to run every {interval_hours} hours.")
     except Exception as e:
-        logger.error(f"Error during startup task cleanup: {str(e)}")
+        logger.error(f"Error during startup initialization: {str(e)}")
     finally:
         db.close()
 
@@ -70,6 +86,14 @@ class AnalyzeRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+class MonitoringConfigRequest(BaseModel):
+    enabled: bool
+    interval_days: Optional[int] = 7
+
+class DecisionRequest(BaseModel):
+    decision: str  # "invertimos", "pasamos", "en_evaluacion"
+    notas: Optional[str] = None
 
 # ----------------- AUTHENTICATION ENDPOINTS -----------------
 
@@ -161,148 +185,6 @@ def update_settings(
 
 # ----------------- ANALYSIS ENDPOINTS (MULTI-TENANT) -----------------
 
-def run_due_diligence_task(domain: str, url: str, org_id: int, user_id: int, user_email: str):
-    """
-    Runs the multi-agent crew in a background task, updating DB Task rows.
-    """
-    db = SessionLocal()
-    try:
-        # 1. Update status to scraping
-        task = db.query(Task).filter_by(id=f"{org_id}_{domain}").first()
-        if task:
-            task.status = "scraping"
-            task.progress = 15
-            task.message = "Scraping startup web presence & checking public records..."
-            db.commit()
-
-        # Gather public API insights
-        company_name = domain.split('.')[0].capitalize()
-        logger.info(f"Running Public API queries for {company_name}")
-        public_insights = get_all_public_insights(company_name)
-        public_insights_text = json.dumps(public_insights, indent=2)
-
-        # Scrape company landing and internal pages
-        payload = SmartScraper.analyze_startup(url)
-
-        internal_pages_text = ""
-        for path, content in payload.get("internal_pages", {}).items():
-            internal_pages_text += f"\n--- Page: {path} ---\n{content}\n"
-        if not internal_pages_text:
-            internal_pages_text = "No internal pages found."
-
-        competitors = json.dumps(payload.get("search_insights", {}).get("competitors", []), indent=2)
-        pricing_product = json.dumps(payload.get("search_insights", {}).get("pricing_and_product", []), indent=2)
-        market_funding = json.dumps(payload.get("search_insights", {}).get("market_and_funding", []), indent=2)
-        team_founders = json.dumps(payload.get("search_insights", {}).get("team_and_founders", []), indent=2)
-
-        # 2. Update status to analyzing
-        task = db.query(Task).filter_by(id=f"{org_id}_{domain}").first()
-        if task:
-            task.status = "analyzing"
-            task.progress = 40
-            task.message = "Coordinating CrewAI multi-agent market, product & omission analysis..."
-            db.commit()
-
-        crew_obj = MarketResearchCrew()
-        inputs = {
-            "company_name": payload.get("company_name", company_name),
-            "company_url": payload.get("company_url", url),
-            "homepage_summary": payload.get("homepage_summary", "")[:2500],
-            "internal_pages_text": internal_pages_text[:2500],
-            "competitor_insights": competitors[:2500],
-            "pricing_and_product_insights": pricing_product[:2500],
-            "market_and_funding_insights": market_funding[:2500],
-            "team_and_founders_insights": team_founders[:2500],
-            "public_api_insights": public_insights_text[:3500] # Pass public records directly to agents!
-        }
-
-        # Run CrewAI kickoff
-        result_output = crew_obj.crew().kickoff(inputs=inputs)
-        markdown_report = getattr(result_output, "raw", str(result_output))
-
-        # Parse metadata
-        score, recommendation, sub_scores = parse_report_meta(markdown_report)
-
-        # Build white-label organization details for PDF
-        org = db.query(Organization).filter_by(id=org_id).first()
-        org_name = org.company_name if org else "DealScout Capital"
-        logo_path = org.logo_path if org else None
-
-        # Generate report data dict
-        report_data_dict = {
-            "domain": domain,
-            "company_name": payload.get("company_name", company_name),
-            "company_url": url,
-            "score": score,
-            "recommendation": recommendation,
-            "sub_scores": sub_scores,
-            "report_md": markdown_report
-        }
-
-        # Generate white-labeled PDF report
-        pdf_path = generate_report_pdf(
-            report_data=report_data_dict,
-            organization_name=org_name,
-            logo_path=logo_path
-        )
-
-        # 3. Create or update Report in DB
-        report = db.query(Report).filter_by(domain=domain, organization_id=org_id).first()
-        if not report:
-            report = Report(
-                domain=domain,
-                company_name=company_name,
-                url=url,
-                score=score,
-                sub_scores=sub_scores,
-                recommendation=recommendation,
-                report_md=markdown_report,
-                pdf_path=pdf_path,
-                llm_provider=crew_obj.provider_name,
-                organization_id=org_id
-            )
-            db.add(report)
-        else:
-            report.score = score
-            report.sub_scores = sub_scores
-            report.recommendation = recommendation
-            report.report_md = markdown_report
-            report.pdf_path = pdf_path
-            report.llm_provider = crew_obj.provider_name
-        db.commit()
-
-        # Update Task to completed
-        final_data = {
-            "company_name": company_name,
-            "domain": domain,
-            "company_url": url,
-            "score": score,
-            "recommendation": recommendation,
-            "sub_scores": sub_scores,
-            "report_md": markdown_report,
-            "llm_provider": crew_obj.provider_name,
-            "pdf_path": f"/reports/{domain}/pdf"
-        }
-
-        task = db.query(Task).filter_by(id=f"{org_id}_{domain}").first()
-        if task:
-            task.status = "completed"
-            task.progress = 100
-            task.message = "Analysis successfully completed!"
-            task.result_json = final_data
-            db.commit()
-
-    except Exception as e:
-        logger.error(f"Error running due diligence background task: {str(e)}", exc_info=True)
-        task = db.query(Task).filter_by(id=f"{org_id}_{domain}").first()
-        if task:
-            task.status = "failed"
-            task.progress = 0
-            task.message = f"Analysis failed: {str(e)}"
-            db.commit()
-    finally:
-        db.close()
-
 @app.post("/analyze")
 def start_analysis(
     req: AnalyzeRequest,
@@ -389,14 +271,13 @@ def start_analysis(
         task.result_json = None
     db.commit()
 
-    # Trigger background thread
-    background_tasks.add_task(
-        run_due_diligence_task,
-        domain=domain,
-        url=validated_url,
-        org_id=current_user.organization_id,
-        user_id=current_user.id,
-        user_email=current_user.email
+    # Trigger Celery asynchronous task
+    run_due_diligence_task.delay(
+        domain,
+        validated_url,
+        current_user.organization_id,
+        current_user.id,
+        current_user.email
     )
 
     return {"status": "running", "task_id": task_id}
@@ -493,6 +374,232 @@ def compare_reports(current_user: User = Depends(get_current_user), db: Session 
             } for r in reports
         ]
     }
+
+# ----------------- CONTINUOUS MONITORING ENDPOINTS -----------------
+
+@app.post("/reports/{domain}/monitoring")
+def configure_monitoring(
+    domain: str,
+    req: MonitoringConfigRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Configures monitoring frequency and enables/disables monitoring for a specific startup."""
+    report = db.query(Report).filter_by(domain=domain, organization_id=current_user.organization_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    report.monitoring_enabled = req.enabled
+    report.monitoring_interval_days = req.interval_days
+    db.commit()
+
+    logger.info(f"Monitoring updated for report {domain}: enabled={req.enabled}, interval={req.interval_days} days.")
+    return {
+        "status": "success",
+        "domain": domain,
+        "monitoring_enabled": report.monitoring_enabled,
+        "monitoring_interval_days": report.monitoring_interval_days
+    }
+
+@app.get("/reports/{domain}/monitoring")
+def get_monitoring_history(
+    domain: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Retrieves current monitoring settings and historical detected changes (alerts)."""
+    report = db.query(Report).filter_by(domain=domain, organization_id=current_user.organization_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    changes = db.query(ReportChange).filter_by(report_id=report.id).order_by(ReportChange.created_at.desc()).all()
+
+    return {
+        "domain": domain,
+        "monitoring_enabled": report.monitoring_enabled,
+        "monitoring_interval_days": report.monitoring_interval_days,
+        "last_monitored_at": report.last_monitored_at.isoformat() if report.last_monitored_at else None,
+        "changes": [
+            {
+                "id": c.id,
+                "change_type": c.change_type,
+                "description": c.description,
+                "old_value": c.old_value,
+                "new_value": c.new_value,
+                "created_at": c.created_at.isoformat()
+            } for c in changes
+        ]
+    }
+
+# ----------------- DECISION CALIBRATION ENDPOINTS -----------------
+
+@app.post("/reports/{domain}/decision")
+def register_decision(
+    domain: str,
+    req: DecisionRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Allows an analyst to register a final investment decision for a generated report."""
+    report = db.query(Report).filter_by(domain=domain, organization_id=current_user.organization_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if req.decision not in ["invertimos", "pasamos", "en_evaluacion"]:
+        raise HTTPException(status_code=400, detail="Invalid decision. Must be 'invertimos', 'pasamos' or 'en_evaluacion'")
+
+    # Upsert decision
+    dec = db.query(Decision).filter_by(report_id=report.id, organization_id=current_user.organization_id).first()
+    if not dec:
+        dec = Decision(
+            report_id=report.id,
+            organization_id=current_user.organization_id,
+            decision=req.decision,
+            notas=req.notas,
+            user_id=current_user.id
+        )
+        db.add(dec)
+    else:
+        dec.decision = req.decision
+        dec.notas = req.notas
+        dec.user_id = current_user.id
+        dec.timestamp = datetime.datetime.utcnow()
+    db.commit()
+
+    # Record Audit Log
+    audit = AuditLog(
+        user_id=current_user.id,
+        user_email=current_user.email,
+        organization_id=current_user.organization_id,
+        action="register_decision",
+        target_company=domain
+    )
+    db.add(audit)
+    db.commit()
+
+    logger.info(f"Decision registered for report {domain}: decision={req.decision}")
+    return {
+        "status": "success",
+        "domain": domain,
+        "decision": dec.decision,
+        "notas": dec.notas
+    }
+
+@app.get("/organizations/{org_id}/decision-stats")
+def get_decision_stats(
+    org_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Returns matching statistics and calibrated category weights for the organization."""
+    if current_user.organization_id != org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    decisions = db.query(Decision).filter_by(organization_id=org_id).all()
+    if not decisions:
+        return {
+            "organization_id": org_id,
+            "total_decisions": 0,
+            "system_overall_match_rate": 1.0,
+            "categories": {},
+            "calibrated_weights": {
+                "market": 0.20,
+                "team": 0.20,
+                "product": 0.20,
+                "traction": 0.20,
+                "risk_legal_omissions": 0.20
+            }
+        }
+
+    categories = ["market", "team", "product", "traction", "risk_legal_omissions"]
+    matches = {cat: 0 for cat in categories}
+    overall_matches = 0
+    total_decisions = len(decisions)
+
+    for d in decisions:
+        r = db.query(Report).filter_by(id=d.report_id).first()
+        if not r:
+            continue
+
+        # Overall match
+        # system reco: GO, CONDITIONAL, NO-GO
+        # user decision: invertimos, en_evaluacion, pasamos
+        is_overall_match = False
+        if d.decision == "invertimos" and r.recommendation == "GO":
+            is_overall_match = True
+        elif d.decision == "pasamos" and r.recommendation == "NO-GO":
+            is_overall_match = True
+        elif d.decision == "en_evaluacion" and r.recommendation == "CONDITIONAL":
+            is_overall_match = True
+
+        if is_overall_match:
+            overall_matches += 1
+
+        # Category level match
+        if r.sub_scores:
+            for cat in categories:
+                score_val = r.sub_scores.get(cat, 80)
+                is_match = False
+                if d.decision == "invertimos" and score_val >= 75:
+                    is_match = True
+                elif d.decision == "pasamos" and score_val < 60:
+                    is_match = True
+                elif d.decision == "en_evaluacion" and 60 <= score_val < 75:
+                    is_match = True
+
+                if is_match:
+                    matches[cat] += 1
+
+    # Match rates
+    overall_match_rate = overall_matches / total_decisions
+    category_match_rates = {}
+    raw_weights = {}
+    total_weight_sum = 0.0
+
+    for cat in categories:
+        rate = matches[cat] / total_decisions
+        category_match_rates[cat] = rate
+
+        # Calculate raw weights with smoothing
+        w = 0.1 + 0.9 * rate
+        raw_weights[cat] = w
+        total_weight_sum += w
+
+    # Normalize weights
+    normalized_weights = {cat: w / total_weight_sum for cat, w in raw_weights.items()}
+
+    return {
+        "organization_id": org_id,
+        "total_decisions": total_decisions,
+        "system_overall_match_rate": overall_match_rate,
+        "categories": {
+            cat: {
+                "matches": matches[cat],
+                "match_rate": category_match_rates[cat],
+                "calibrated_weight": normalized_weights[cat]
+            } for cat in categories
+        },
+        "calibrated_weights": normalized_weights
+    }
+
+# ----------------- PRECISION BENCHMARK ENDPOINTS -----------------
+
+@app.get("/admin/benchmark")
+def list_benchmarks(current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Exposes precision benchmark scorecard table. Restricted to administrator role only."""
+    benchmarks = db.query(PrecisionBenchmark).order_by(PrecisionBenchmark.created_at.desc()).all()
+    return [
+        {
+            "id": b.id,
+            "startup_name": b.startup_name,
+            "url": b.url,
+            "score": b.score,
+            "recommendation": b.recommendation,
+            "known_outcome": b.known_outcome,
+            "matched": b.matched,
+            "created_at": b.created_at.isoformat()
+        } for b in benchmarks
+    ]
 
 # ----------------- DEMO BACKWARD COMPATIBLE & UTILS -----------------
 

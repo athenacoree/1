@@ -1,3 +1,6 @@
+import os
+os.environ["JWT_SECRET"] = "test-secret-value-dealscout-2026-minimum-length-32-chars-long"
+
 import unittest
 from unittest import mock
 from fastapi.testclient import TestClient
