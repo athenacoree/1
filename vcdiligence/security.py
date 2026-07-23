@@ -5,7 +5,9 @@ import jwt
 import bcrypt
 
 # Secret keys and algorithm
-JWT_SECRET = os.getenv("JWT_SECRET", "super-secret-dealscout-key-2026")
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    raise ValueError("CRITICAL CONFIGURATION ERROR: The 'JWT_SECRET' environment variable is not defined.")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 480 # 8 hours
 

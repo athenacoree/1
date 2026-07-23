@@ -1,7 +1,7 @@
 import os
 import json
 import datetime
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Text, JSON
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Text, JSON, Boolean
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -62,7 +62,56 @@ class Report(Base):
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
+    # Monitoring configuration columns
+    monitoring_enabled = Column(Boolean, default=False, nullable=False)
+    monitoring_interval_days = Column(Integer, default=7, nullable=False)
+    last_monitored_at = Column(DateTime, nullable=True)
+
     organization = relationship("Organization", back_populates="reports")
+    changes = relationship("ReportChange", back_populates="report", cascade="all, delete-orphan")
+
+
+class ReportChange(Base):
+    __tablename__ = "report_changes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    report_id = Column(Integer, ForeignKey("reports.id"), nullable=False)
+    change_type = Column(String, nullable=False) # "score_change", "sec_edgar", "courtlistener", "github", "general"
+    description = Column(Text, nullable=False)
+    old_value = Column(Text, nullable=True)
+    new_value = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    report = relationship("Report", back_populates="changes")
+
+
+class Decision(Base):
+    __tablename__ = "decisions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    report_id = Column(Integer, ForeignKey("reports.id"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
+    decision = Column(String, nullable=False) # "invertimos", "pasamos", "en_evaluacion"
+    notas = Column(Text, nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+
+    report = relationship("Report")
+    organization = relationship("Organization")
+    user = relationship("User")
+
+
+class PrecisionBenchmark(Base):
+    __tablename__ = "precision_benchmarks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    startup_name = Column(String, nullable=False)
+    url = Column(String, nullable=False)
+    score = Column(Integer, nullable=True)
+    recommendation = Column(String, nullable=True)
+    known_outcome = Column(String, nullable=False) # "success", "failure", "acquisition"
+    matched = Column(Boolean, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 class Task(Base):
     __tablename__ = "tasks"

@@ -1,5 +1,7 @@
-import unittest
 import os
+os.environ["JWT_SECRET"] = "test-secret-value-dealscout-2026-minimum-length-32-chars-long"
+
+import unittest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from vcdiligence.database import Base, User, Organization

@@ -56,6 +56,9 @@
     showSettings: false,
     settingsName: '',
     settingsLogoFile: null,
+    benchmarks: [],
+    showBenchmark: false,
+    userDecision: '',
 
     // Auth inputs
     loginEmail: 'analyst@dealscout.ai',
@@ -79,6 +82,45 @@
         if (this.token) {
             await this.loadUserProfile();
             await this.loadReports();
+        }
+    },
+
+    async loadBenchmarks() {
+        try {
+            const res = await fetch('/admin/benchmark', {
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            if (res.status === 200) {
+                this.benchmarks = await res.json();
+            }
+        } catch (err) {
+            console.error('Failed to load benchmarks', err);
+        }
+    },
+
+    async submitDecision() {
+        if (!this.userDecision) {
+            alert('Please select a decision.');
+            return;
+        }
+        try {
+            const res = await fetch(`/reports/${this.resultData.domain}/decision`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + this.token
+                },
+                body: JSON.stringify({ decision: this.userDecision, notas: 'Calibrated from UI' })
+            });
+            const data = await res.json();
+            if (res.status === 200) {
+                alert('Decision successfully recorded for calibration.');
+                await this.loadReports();
+            } else {
+                throw new Error(data.detail || 'Failed to submit decision');
+            }
+        } catch (err) {
+            alert(err.message);
         }
     },
 
@@ -292,6 +334,11 @@
                         <span class="w-2 h-2 rounded-full bg-cyan-400 mr-2 animate-pulse"></span>
                         <span x-text="user.email"></span>
                     </span>
+                    <template x-if="user && user.role === 'administrador'">
+                        <button @click="await loadBenchmarks(); showBenchmark = true" class="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg font-semibold text-emerald-400 border border-emerald-400/20">
+                            Precision Scorecard
+                        </button>
+                    </template>
                     <button @click="showComparison = true" class="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg font-semibold text-cyan-400 border border-cyan-400/20">
                         Compare Deals
                     </button>
@@ -427,6 +474,25 @@
                                             class="px-4 py-2 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 rounded-xl text-xs font-bold border border-cyan-500/20 flex items-center space-x-1.5">
                                             <span>Download PDF</span>
                                         </a>
+                                    </div>
+                                </div>
+
+                                <!-- Decision Calibration UI -->
+                                <div class="mt-4 p-4 rounded-2xl bg-slate-950/40 border border-slate-900 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-6">
+                                    <div>
+                                        <h4 class="text-xs font-bold uppercase text-slate-400">Final Decision Calibration</h4>
+                                        <p class="text-[10px] text-slate-500">Record your fund's actual decision to calibrate DealScout's future scoring weights.</p>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <select x-model="userDecision" class="bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none">
+                                            <option value="">-- Register Decision --</option>
+                                            <option value="invertimos">Invertimos (We Invest)</option>
+                                            <option value="pasamos">Pasamos (We Pass)</option>
+                                            <option value="en_evaluacion">En Evaluación (In Evaluation)</option>
+                                        </select>
+                                        <button @click="await submitDecision()" class="px-4 py-1.5 bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold rounded-xl text-xs">
+                                            Save
+                                        </button>
                                     </div>
                                 </div>
 
@@ -577,6 +643,55 @@
                                     </template>
                                 </td>
                                 <td class="py-4 px-4 text-slate-400" x-text="r.created_at.split('T')[0]"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Benchmark Modal -->
+    <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto" x-show="showBenchmark" style="display: none;">
+        <div class="glass-premium p-8 rounded-3xl max-w-4xl w-full text-left">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-black text-white">System Precision Scorecard</h3>
+                <button @click="showBenchmark = false" class="text-slate-400 hover:text-white font-bold text-sm">Close</button>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="border-b border-slate-800 text-slate-400 uppercase tracking-widest text-[10px]">
+                            <th class="py-3 px-4">Startup</th>
+                            <th class="py-3 px-4">URL</th>
+                            <th class="py-3 px-4">System Score</th>
+                            <th class="py-3 px-4">Recommendation</th>
+                            <th class="py-3 px-4">Actual Outcome</th>
+                            <th class="py-3 px-4">Match Indicator</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="b in benchmarks" :key="b.id">
+                            <tr class="border-b border-slate-900/60 hover:bg-slate-900/20">
+                                <td class="py-4 px-4 font-bold text-white text-sm" x-text="b.startup_name"></td>
+                                <td class="py-4 px-4 text-cyan-400 font-mono text-[10px]" x-text="b.url"></td>
+                                <td class="py-4 px-4 text-cyan-400 font-extrabold text-sm" x-text="b.score !== null ? b.score : 'N/A'"></td>
+                                <td class="py-4 px-4">
+                                    <span class="px-2 py-0.5 rounded font-bold uppercase text-[10px]"
+                                        :class="{
+                                            'bg-emerald-500/10 text-emerald-400': b.recommendation === 'GO',
+                                            'bg-yellow-500/10 text-yellow-400': b.recommendation === 'CONDITIONAL',
+                                            'bg-red-500/10 text-red-400': b.recommendation === 'NO-GO',
+                                            'bg-slate-500/10 text-slate-400': !b.recommendation
+                                        }" x-text="b.recommendation || 'N/A'"></span>
+                                </td>
+                                <td class="py-4 px-4 text-slate-400 capitalize font-bold" x-text="b.known_outcome"></td>
+                                <td class="py-4 px-4">
+                                    <span class="px-2 py-0.5 rounded font-bold uppercase text-[10px]"
+                                        :class="b.matched ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'"
+                                        x-text="b.matched ? 'MATCHED' : 'MISALIGNED'"></span>
+                                </td>
                             </tr>
                         </template>
                     </tbody>

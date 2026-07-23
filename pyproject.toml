@@ -15,6 +15,14 @@ dependencies = [
     "duckduckgo-search",
     "pydantic",
     "python-dotenv",
+    "sqlalchemy",
+    "bcrypt",
+    "pyjwt",
+    "playwright",
+    "reportlab",
+    "celery",
+    "redis",
+    "apscheduler",
 ]
 
 [project.scripts]
