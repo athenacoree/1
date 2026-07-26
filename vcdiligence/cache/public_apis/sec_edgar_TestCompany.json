@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-07-26T05:07:22.610824",
+  "data": {
+    "status": "found",
+    "cik": "0000123456",
+    "name": "TestCompany",
+    "stateOfIncorporation": "Unknown",
+    "recent_filings": []
+  }
+}

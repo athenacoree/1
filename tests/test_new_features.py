@@ -2,6 +2,7 @@ import os
 os.environ["JWT_SECRET"] = "test-secret-value-dealscout-2026-minimum-length-32-chars-long"
 
 import unittest
+from unittest import mock
 from fastapi.testclient import TestClient
 
 from vcdiligence.app import app
@@ -161,6 +162,77 @@ class TestNewFeatures(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.json()), 1)
         self.assertEqual(resp.json()[0]["startup_name"], "Known Startup")
+
+    @mock.patch("vcdiligence.public_apis.requests.get")
+    def test_force_refresh_public_apis(self, mock_get):
+        """Verify that force_refresh = True bypasses get_cached_response."""
+        from vcdiligence.public_apis import (
+            search_sec_edgar,
+            get_cached_response,
+            set_cached_response
+        )
+        # Mock requests.get response
+        mock_resp = mock.MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"0": {"cik_str": "123456", "title": "TestCompany"}}
+        mock_get.return_value = mock_resp
+
+        # Pre-seed cache with dummy data
+        set_cached_response("sec_edgar", "TestCompany", {"status": "found", "cik": "999999", "name": "Cached Company"})
+
+        # Call with force_refresh=False (should return cached data)
+        res_cached = search_sec_edgar("TestCompany", force_refresh=False)
+        self.assertEqual(res_cached.get("cik"), "999999")
+
+        # Call with force_refresh=True (should bypass cache and call live API)
+        res_fresh = search_sec_edgar("TestCompany", force_refresh=True)
+        self.assertEqual(res_fresh.get("cik"), "0000123456")
+
+    def test_merge_devils_advocate_logic(self):
+        """Verify that merge_devils_advocate merges business report and counter-arguments correctly."""
+        from vcdiligence.parser import merge_devils_advocate
+
+        business_report = (
+            "INVESTMENT_SCORE: 85\n"
+            "RECOMMENDATION: GO\n"
+            "SUB_SCORES: {\"market\": 80, \"team\": 80, \"product\": 80, \"traction\": 80, \"risk_legal_omissions\": 80}\n"
+            "\n"
+            "# Executive Summary\n"
+            "We believe this is a strong investment."
+        )
+        devils_section = (
+            "# Caso a Favor vs. Caso en Contra\n"
+            "Here is the counter-argument about lack of clear target market."
+        )
+
+        merged = merge_devils_advocate(business_report, devils_section)
+
+        # Check that top lines are preserved
+        self.assertTrue(merged.startswith("INVESTMENT_SCORE: 85"))
+        self.assertIn("RECOMMENDATION: GO", merged)
+        self.assertIn("## Caso a Favor vs. Caso en Contra", merged)
+        self.assertIn("Here is the counter-argument", merged)
+        self.assertIn("# Executive Summary", merged)
+
+    @mock.patch("vcdiligence.llm_manager.LLMProviderManager.get_llm")
+    def test_crew_task_callback(self, mock_get_llm):
+        """Verify that task_callback parameter is supported and executed after business_analyst_task."""
+        from vcdiligence.crew import MarketResearchCrew
+        from crewai import LLM
+        mock_get_llm.return_value = (LLM(model="openai/gpt-4o-mini", api_key="dummy"), "openai")
+
+        callback_called = False
+        def dummy_callback(task_output):
+            nonlocal callback_called
+            callback_called = True
+
+        crew_obj = MarketResearchCrew(task_callback=dummy_callback)
+        self.assertEqual(crew_obj.task_callback, dummy_callback)
+
+        tasks = crew_obj.crew().tasks
+        business_task = [t for t in tasks if t.callback == dummy_callback][0]
+        self.assertEqual(business_task.callback, dummy_callback)
+
 
 if __name__ == "__main__":
     unittest.main()

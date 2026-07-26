@@ -4,14 +4,13 @@ import datetime
 import smtplib
 from email.mime.text import MIMEText
 import requests
-from unittest import mock
 
-from vcdiligence.database import SessionLocal, Report, ReportChange
+from vcdiligence.database import SessionLocal, Report, ReportChange, Task
 from vcdiligence.logging_config import logger
 from vcdiligence.public_apis import get_all_public_insights, PUBLIC_CACHE_DIR
 from vcdiligence.scraper import SmartScraper
 from vcdiligence.crew import MarketResearchCrew
-from vcdiligence.parser import parse_report_meta
+from vcdiligence.parser import parse_report_meta, merge_devils_advocate
 from vcdiligence.tasks import get_adjusted_score_for_org
 
 def get_old_cached_insight(api_name: str, company_name: str) -> dict:
@@ -99,9 +98,8 @@ def run_continuous_monitoring_job():
             old_court = get_old_cached_insight("courtlistener", company_name)
             old_github = get_old_cached_insight("github", company_name)
 
-            # 2. Force fresh fetch of live public insights (bypassing cache by mocking get_cached_response)
-            with mock.patch("vcdiligence.public_apis.get_cached_response", return_value=None):
-                new_sec = get_all_public_insights(company_name)
+            # 2. Force fresh fetch of live public insights (bypassing cache by passing force_refresh=True)
+            new_sec = get_all_public_insights(company_name, force_refresh=True)
 
             # 3. Compare public insights
             detected_changes = []
@@ -157,7 +155,41 @@ def run_continuous_monitoring_job():
                 market_funding = json.dumps(payload.get("search_insights", {}).get("market_and_funding", []), indent=2)
                 team_founders = json.dumps(payload.get("search_insights", {}).get("team_and_founders", []), indent=2)
 
-                crew_obj = MarketResearchCrew()
+                # Support Task status tracking for "debating" step
+                task_id = f"{r.organization_id}_{r.domain}"
+                task_row = db.query(Task).filter_by(id=task_id).first()
+                if not task_row:
+                    task_row = Task(
+                        id=task_id,
+                        domain=r.domain,
+                        status="analyzing",
+                        progress=40,
+                        message="Coordinating CrewAI multi-agent market, product & omission analysis...",
+                        organization_id=r.organization_id
+                    )
+                    db.add(task_row)
+                    db.commit()
+                else:
+                    task_row.status = "analyzing"
+                    task_row.progress = 40
+                    task_row.message = "Coordinating CrewAI multi-agent market, product & omission analysis..."
+                    db.commit()
+
+                def monitor_task_callback(task_output):
+                    db_cb = SessionLocal()
+                    try:
+                        t = db_cb.query(Task).filter_by(id=task_id).first()
+                        if t:
+                            t.status = "debating"
+                            t.progress = 75
+                            t.message = "Cuestionando la recomendación: buscando el mejor contraargumento..."
+                            db_cb.commit()
+                    except Exception as e:
+                        logger.error(f"Error in monitoring task status callback: {str(e)}")
+                    finally:
+                        db_cb.close()
+
+                crew_obj = MarketResearchCrew(task_callback=monitor_task_callback)
                 inputs = {
                     "company_name": payload.get("company_name", company_name),
                     "company_url": payload.get("company_url", r.url),
@@ -171,7 +203,19 @@ def run_continuous_monitoring_job():
                 }
 
                 result_output = crew_obj.crew().kickoff(inputs=inputs)
-                markdown_report = getattr(result_output, "raw", str(result_output))
+
+                # Merge business analyst memo and devils advocate section
+                try:
+                    tasks_out = getattr(result_output, "tasks_output", [])
+                    if len(tasks_out) >= 7:
+                        business_analyst_report = tasks_out[5].raw
+                        devils_advocate_section = tasks_out[6].raw
+                        markdown_report = merge_devils_advocate(business_analyst_report, devils_advocate_section)
+                    else:
+                        markdown_report = getattr(result_output, "raw", str(result_output))
+                except Exception as e:
+                    logger.error(f"Error merging Devil's Advocate section in monitoring: {str(e)}")
+                    markdown_report = getattr(result_output, "raw", str(result_output))
 
                 parsed_score, parsed_recommendation, sub_scores = parse_report_meta(markdown_report)
 
@@ -190,6 +234,25 @@ def run_continuous_monitoring_job():
                     r.report_md = markdown_report
                     # Regenerate PDF path will happen on-the-fly when requested or updated
                     r.pdf_path = None
+                    db.commit()
+
+                # Update Task to completed
+                task_row = db.query(Task).filter_by(id=task_id).first()
+                if task_row:
+                    task_row.status = "completed"
+                    task_row.progress = 100
+                    task_row.message = "Analysis successfully completed!"
+                    task_row.result_json = {
+                        "company_name": company_name,
+                        "domain": r.domain,
+                        "company_url": r.url,
+                        "score": new_score,
+                        "recommendation": new_reco,
+                        "sub_scores": sub_scores,
+                        "report_md": markdown_report,
+                        "llm_provider": crew_obj.provider_name,
+                        "pdf_path": f"/reports/{r.domain}/pdf"
+                    }
                     db.commit()
 
             except Exception as e:

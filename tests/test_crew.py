@@ -12,15 +12,16 @@ class TestCrewConfig(unittest.TestCase):
             agents = crew_obj.crew().agents
             tasks = crew_obj.crew().tasks
 
-            # Check for exactly 6 agents
-            self.assertEqual(len(agents), 6)
+            # Check for exactly 7 agents
+            self.assertEqual(len(agents), 7)
             agent_roles = [a.role.strip() for a in agents]
             self.assertIn("Omission Analyst", agent_roles)
             self.assertIn("Lead Venture Capital Business Analyst", agent_roles)
+            self.assertIn("Devil's Advocate", agent_roles)
 
-            # Check for exactly 6 tasks
-            self.assertEqual(len(tasks), 6)
-            print("Successfully initialized crew with 6 agents and 6 tasks.")
+            # Check for exactly 7 tasks
+            self.assertEqual(len(tasks), 7)
+            print("Successfully initialized crew with 7 agents and 7 tasks.")
         except Exception as e:
             self.fail(f"Crew initialization failed: {str(e)}")
 

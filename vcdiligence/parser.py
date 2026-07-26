@@ -45,3 +45,34 @@ def parse_report_meta(markdown_text: str):
                 sub_scores[key] = int(m.group(1))
 
     return score, recommendation, sub_scores
+
+
+def merge_devils_advocate(business_report: str, devils_section: str) -> str:
+    """
+    Inserts the Devil's Advocate section into the business analyst's report.
+    It should appear right after the top metadata lines (INVESTMENT_SCORE,
+    RECOMMENDATION, SUB_SCORES) and before the rest of the details (Executive Summary, etc.).
+    """
+    if not business_report:
+        return devils_section or ""
+
+    lines = business_report.split("\n")
+    meta_indices = []
+    for idx, line in enumerate(lines):
+        if any(prefix in line for prefix in ["INVESTMENT_SCORE:", "RECOMMENDATION:", "SUB_SCORES:"]):
+            meta_indices.append(idx)
+
+    insert_idx = max(meta_indices) + 1 if meta_indices else 0
+
+    section_title = "## Caso a Favor vs. Caso en Contra"
+    # Clean up the devils_section's first heading if any, and structure nicely
+    clean_section = devils_section.strip()
+    if clean_section.startswith("#"):
+        # Remove any leading title like "# Caso a Favor..." or "# Análisis Contradictorio" if generated
+        clean_section = re.sub(r"^#+\s+.*", "", clean_section).strip()
+
+    formatted_section = f"\n{section_title}\n\n{clean_section}\n"
+
+    # Reassemble report
+    new_lines = lines[:insert_idx] + [formatted_section] + lines[insert_idx:]
+    return "\n".join(new_lines)
