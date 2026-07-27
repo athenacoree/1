@@ -52,11 +52,11 @@ Para alcanzar los estándares de confiabilidad requeridos por firmas de inversi�
 └─────────────────────────────────────────────────────────┘
 ```
 
-### Capa de Persistencia Relacional y Multi-Tenancy (SQLite/PostgreSQL)
+### Capa de Persistencia Relacional, Cola de Tareas Integrada y Multi-Tenancy (SQLite/PostgreSQL)
 El almacenamiento volátil en memoria y en disco local del MVP ha sido reemplazado por un motor ORM con SQLAlchemy:
 - **Modelos de datos:** Se han modelado tablas para `organizations` (inquilinos), `users` (con roles `analista` y `administrador`), `reports` (memos de inversión guardados con sus sub-scores), `tasks` (registro persistente de tareas activas) y `audit_logs` (auditoría de accesos).
 - **Aislamiento Multi-Tenancy:** Cada consulta está estrictamente filtrada por el identificador de la organización (`organization_id`). Un usuario no puede ver ni descargar reportes de otras firmas bajo ninguna circunstancia.
-- **Cola de Tareas Persistente:** En lugar de un diccionario en memoria propicio a perderse ante un reinicio del servidor (por ejemplo, en el plan gratuito de Render), los estados y resultados de las tareas en segundo plano se persisten en la tabla `tasks` de la base de datos, garantizando consistencia.
+- **Cola de Tareas Ligera con FastAPI BackgroundTasks:** Hemos simplificado la infraestructura eliminando las dependencias externas de Celery y Redis. Ahora, el análisis asíncrono se orquesta a través de `BackgroundTasks` de FastAPI directamente integrado con la tabla `tasks` en la base de datos relacional. Los estados (`starting`, `scraping`, `analyzing`, `debating`, `completed`, `failed`) y progresos se persisten y actualizan de forma continua, facilitando un polling reactivo desde el frontend sin sobrecargar el servidor.
 
 ### Capa de Autenticación, Seguridad y SSRF
 - **Autenticación JWT:** Se implementaron flujos de login y protección de rutas mediante JSON Web Tokens firmados con algoritmo HS256 y contraseñas cifradas usando el algoritmo robusto `bcrypt`.
@@ -74,7 +74,7 @@ El almacenamiento volátil en memoria y en disco local del MVP ha sido reemplaza
    - **USPTO:** Existencia de marcas y patentes registradas.
    - **CourtListener (RECAP):** Litigios federales públicos de la empresa o fundadores.
    - **GitHub API:** Actividad de repositorios públicos del equipo técnico.
-4. **Scraping Adaptativo con Playwright:** El scraper intenta requests estáticos. Si falla o es bloqueado (ej. Cloudflare/SPA), activa automáticamente un navegador Playwright headless en segundo plano para renderizar el Javascript de la startup de manera transparente.
+4. **Scraping Adaptativo con Playwright (Lazy Load):** El scraper intenta requests estáticos. Si falla o es bloqueado (ej. Cloudflare/SPA), activa automáticamente un navegador Playwright headless en segundo plano para renderizar el Javascript de la startup de manera transparente. Las dependencias del navegador e inicialización de Playwright están optimizadas mediante "Lazy Loading" (carga perezosa), importándose únicamente cuando el fallback se activa en lugar de hacerlo durante el arranque global de la aplicación.
 5. **Detección Explícita de Omisiones:** Cuando una página o API no se puede verificar, el sistema lo registra como tal (`[Could not verify X]`) en lugar de permitir que el LLM invente información.
 6. **Ejecución de la Red de Agentes (CrewAI):** Se alimentan las 6 misiones con todo el HTML scrapeado y el JSON enriquecido de las APIs públicas.
 7. **El Nuevo Agente: Omission Analyst:** Un agente especializado evalúa el contexto contrastándolo con checklists por industria/etapa y redacta la sección **"Señales por Ausencia"**, analizando además la densidad de lenguaje vago (superlativos sin sustento) frente a datos numéricos reales.
@@ -92,7 +92,19 @@ El almacenamiento volátil en memoria y en disco local del MVP ha sido reemplaza
 
 ---
 
-## 6. Variables de Entorno y Configuración
+## 6. Nuevas Formas de Iniciar un Análisis (Entry Modes)
+Para enriquecer la experiencia de usuario y agilizar la diligencia debida, se han incorporado cuatro métodos flexibles de entrada en la interfaz de usuario:
+1. **Por URL:** Entrada tradicional para iniciar el scraping asíncrono directo de un dominio de internet.
+2. **Por Nombre de Empresa:** Un buscador semántico integrado (`POST /search-company`) que localiza en DuckDuckGo hasta 3 candidatos corporativos oficiales (con logos y favicons dinámicos) y permite confirmar cuál se desea analizar antes de disparar el flujo completo.
+3. **Por Perfil de LinkedIn:** Soporte para perfiles de empresas o fundadores en LinkedIn. El scraper de backend (`SmartScraper.scrape_linkedin`) extrae datos esenciales (sector, tamaño de equipo) mediante DuckDuckGo y los pasa como contexto de agentes, infiriendo de forma autónoma el sitio web oficial.
+4. **Por Subida de Pitch Deck:** Carga directa multipart (`POST /analyze/upload`) de presentaciones en formato PDF o PPTX. Utilizando las bibliotecas ligeras `pypdf` y `python-pptx`, se extrae el texto corporativo de forma instantánea, se detectan enlaces internos mediante expresiones regulares para definir el dominio objetivo y se pasa todo el pitch deck estructurado como contexto enriquecido a la red de agentes de CrewAI.
+
+## 7. Notificaciones de Finalización por Correo
+Cuando finaliza un análisis en segundo plano, DealScout AI envía automáticamente una notificación de correo por SMTP al usuario (`send_report_ready_email`) detallando el nombre de la startup analizada, el score final de inversión y un enlace directo con token JWT de query parameter para descargar el reporte PDF sin requerir logins manuales recurrentes.
+
+---
+
+## 8. Variables de Entorno y Configuración
 | Variable | Descripción | Valor por defecto |
 |---|---|---|
 | `LLM_PROVIDER` | Proveedor principal de LLM (`openrouter` \| `grok` \| `openai`) | `openrouter` |
@@ -102,6 +114,11 @@ El almacenamiento volátil en memoria y en disco local del MVP ha sido reemplaza
 | `DATABASE_URL` | URL de base de datos relacional (PostgreSQL en producción) | `sqlite:///vcdiligence.db` |
 | `JWT_SECRET` | Firma de seguridad para tokens JWT de sesión | Clave autogenerada |
 | `ENV` | Entorno de despliegue (`production` para deshabilitar reload) | `development` |
+| `SMTP_HOST` | Servidor SMTP para alertas por correo | `smtp.gmail.com` |
+| `SMTP_PORT` | Puerto de conexión SMTP | `587` |
+| `SMTP_USERNAME`| Cuenta/correo emisor para SMTP | Opcional |
+| `SMTP_PASSWORD`| Clave de aplicación/contraseña SMTP | Opcional |
+| `SMTP_FROM`    | Remitente del mensaje de correo | `noreply@dealscout.ai` |
 
 ---
 

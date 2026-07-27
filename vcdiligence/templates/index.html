@@ -66,7 +66,15 @@
     authError: '',
 
     // Analysis variables
+    entryMethod: 'url', // 'url', 'name', 'linkedin', 'pitch_deck'
     startupUrl: '',
+    companyNameSearch: '',
+    linkedinUrl: '',
+    pitchDeckFile: null,
+    notifyEmail: '',
+    searchCandidates: [],
+    isSearchingCompany: false,
+
     isLoading: false,
     taskId: '',
     statusMessage: '',
@@ -205,6 +213,35 @@
         }
     },
 
+    async handleSearchCompany() {
+        this.errorMessage = '';
+        this.searchCandidates = [];
+        if (!this.companyNameSearch.trim()) {
+            this.errorMessage = 'Please enter a company name.';
+            return;
+        }
+        this.isSearchingCompany = true;
+        try {
+            const res = await fetch('/search-company', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + this.token
+                },
+                body: JSON.stringify({ company_name: this.companyNameSearch })
+            });
+            const data = await res.json();
+            if (res.status !== 200) {
+                throw new Error(data.detail || 'Failed to search company');
+            }
+            this.searchCandidates = data.options;
+        } catch (err) {
+            this.errorMessage = err.message || 'Error searching company candidates.';
+        } finally {
+            this.isSearchingCompany = false;
+        }
+    },
+
     async triggerAnalysis(urlToScan) {
         this.errorMessage = '';
         this.isLoading = true;
@@ -226,12 +263,108 @@
                     'Content-Type': 'application/json',
                     'Authorization': 'Bearer ' + this.token
                 },
-                body: JSON.stringify({ url: this.startupUrl })
+                body: JSON.stringify({
+                    url: this.startupUrl,
+                    notify_email: this.notifyEmail || null
+                })
             });
 
             const data = await response.json();
             if (response.status !== 200) {
                 throw new Error(data.detail || 'Failed to start analysis');
+            }
+
+            this.taskId = data.task_id;
+
+            if (data.status === 'completed') {
+                await this.fetchCompletedResult();
+            } else {
+                this.startPolling();
+            }
+        } catch (err) {
+            this.errorMessage = err.message || 'An unexpected error occurred.';
+            this.isLoading = false;
+        }
+    },
+
+    async triggerLinkedInAnalysis() {
+        this.errorMessage = '';
+        this.isLoading = true;
+        this.showResult = false;
+        this.statusMessage = 'Initializing DealScout AI network with LinkedIn profile...';
+        this.progressPercent = 5;
+
+        if (!this.linkedinUrl) {
+            this.errorMessage = 'Please enter a valid LinkedIn URL.';
+            this.isLoading = false;
+            return;
+        }
+
+        try {
+            const response = await fetch('/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + this.token
+                },
+                body: JSON.stringify({
+                    linkedin_url: this.linkedinUrl,
+                    notify_email: this.notifyEmail || null
+                })
+            });
+
+            const data = await response.json();
+            if (response.status !== 200) {
+                throw new Error(data.detail || 'Failed to start analysis');
+            }
+
+            this.taskId = data.task_id;
+
+            if (data.status === 'completed') {
+                await this.fetchCompletedResult();
+            } else {
+                this.startPolling();
+            }
+        } catch (err) {
+            this.errorMessage = err.message || 'An unexpected error occurred.';
+            this.isLoading = false;
+        }
+    },
+
+    async triggerPitchDeckAnalysis() {
+        this.errorMessage = '';
+        this.isLoading = true;
+        this.showResult = false;
+        this.statusMessage = 'Uploading pitch deck and initializing agent analysis...';
+        this.progressPercent = 5;
+
+        if (!this.pitchDeckFile) {
+            this.errorMessage = 'Please select a Pitch Deck PDF or PPTX file.';
+            this.isLoading = false;
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('pitch_deck', this.pitchDeckFile);
+        if (this.startupUrl) {
+            formData.append('url', this.startupUrl);
+        }
+        if (this.notifyEmail) {
+            formData.append('notify_email', this.notifyEmail);
+        }
+
+        try {
+            const response = await fetch('/analyze/upload', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + this.token
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+            if (response.status !== 200) {
+                throw new Error(data.detail || 'Failed to upload pitch deck');
             }
 
             this.taskId = data.task_id;
@@ -307,7 +440,6 @@
 
     parseOmissionSection(reportMd) {
         if (!reportMd) return 'No report data loaded.';
-        // Extract content between 'Señales por Ausencia' and next section
         const match = reportMd.match(/Señales por Ausencia([\s\S]*?)(?:#|$)/i);
         if (match && match[1]) {
             return match[1].trim();
@@ -379,7 +511,7 @@
                         </button>
                     </div>
 
-                    <div class="mt-6 pt-4 border-t border-slate-900 text-[10px] text-slate-500">
+                    <div class="mt-6 pt-4 border-t border-slate-500 text-[10px] text-slate-500">
                         Demo Accounts:<br/>
                         Admin: <span class="text-cyan-400">admin@dealscout.ai</span> (adminpassword)<br/>
                         Analyst: <span class="text-emerald-400">analyst@dealscout.ai</span> (analystpassword)
@@ -397,14 +529,103 @@
                     <!-- Left Sidebar (Deals List / Settings) -->
                     <div class="lg:col-span-1 space-y-6">
                         <div class="glass p-6 rounded-2xl">
-                            <h3 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Analyze New Deal</h3>
-                            <div class="space-y-3">
-                                <input type="text" x-model="startupUrl" placeholder="Enter startup URL (e.g. stripe.com)"
-                                    class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-sm text-slate-200 focus:border-cyan-500 outline-none">
+                            <h3 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Start New Analysis</h3>
+
+                            <!-- Method Tabs -->
+                            <div class="flex border-b border-slate-800 mb-4 bg-slate-950/40 rounded-lg p-1">
+                                <button @click="entryMethod = 'url'" :class="entryMethod === 'url' ? 'bg-slate-800 text-cyan-400' : 'text-slate-400'" class="flex-grow py-2 text-center text-xs font-bold rounded transition-all">URL</button>
+                                <button @click="entryMethod = 'name'" :class="entryMethod === 'name' ? 'bg-slate-800 text-cyan-400' : 'text-slate-400'" class="flex-grow py-2 text-center text-xs font-bold rounded transition-all">Nombre</button>
+                                <button @click="entryMethod = 'linkedin'" :class="entryMethod === 'linkedin' ? 'bg-slate-800 text-cyan-400' : 'text-slate-400'" class="flex-grow py-2 text-center text-xs font-bold rounded transition-all">LinkedIn</button>
+                                <button @click="entryMethod = 'pitch_deck'" :class="entryMethod === 'pitch_deck' ? 'bg-slate-800 text-cyan-400' : 'text-slate-400'" class="flex-grow py-2 text-center text-xs font-bold rounded transition-all">Pitch Deck</button>
+                            </div>
+
+                            <!-- Form: Por URL -->
+                            <div x-show="entryMethod === 'url'" class="space-y-3">
+                                <div>
+                                    <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Startup website URL</label>
+                                    <input type="text" x-model="startupUrl" placeholder="stripe.com"
+                                        class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-sm text-slate-200 focus:border-cyan-500 outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Email for notification (Optional)</label>
+                                    <input type="email" x-model="notifyEmail" placeholder="your@email.com"
+                                        class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-sm text-slate-200 focus:border-cyan-500 outline-none">
+                                </div>
                                 <button @click="triggerAnalysis()" class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold text-sm">
-                                    Analyze Website
+                                    Analyze URL
                                 </button>
                             </div>
+
+                            <!-- Form: Por Nombre -->
+                            <div x-show="entryMethod === 'name'" class="space-y-3" style="display: none;">
+                                <div>
+                                    <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Company name</label>
+                                    <input type="text" x-model="companyNameSearch" placeholder="Stripe"
+                                        class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-sm text-slate-200 focus:border-cyan-500 outline-none">
+                                </div>
+                                <button @click="handleSearchCompany()" class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold text-sm flex justify-center items-center">
+                                    <span x-show="!isSearchingCompany">Search Candidates</span>
+                                    <svg x-show="isSearchingCompany" class="animate-spin h-5 w-5 text-slate-950" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                </button>
+
+                                <!-- Candidates Options -->
+                                <template x-if="searchCandidates.length > 0">
+                                    <div class="mt-4 pt-3 border-t border-slate-800/80 space-y-2">
+                                        <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Select company candidate</label>
+                                        <template x-for="c in searchCandidates" :key="c.url">
+                                            <div @click="triggerAnalysis(c.url)" class="p-3 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-cyan-500/50 cursor-pointer flex items-center space-x-3 transition-all">
+                                                <img :src="c.favicon" class="w-6 h-6 rounded" onerror="this.src='https://www.google.com/s2/favicons?domain=stripe.com&sz=64'"/>
+                                                <div class="flex-grow overflow-hidden">
+                                                    <div class="font-bold text-sm text-white truncate" x-text="c.name"></div>
+                                                    <div class="text-[10px] text-slate-400 truncate" x-text="c.domain"></div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <!-- Form: Por LinkedIn -->
+                            <div x-show="entryMethod === 'linkedin'" class="space-y-3" style="display: none;">
+                                <div>
+                                    <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">LinkedIn Profile or Company URL</label>
+                                    <input type="text" x-model="linkedinUrl" placeholder="https://www.linkedin.com/company/stripe"
+                                        class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-sm text-slate-200 focus:border-cyan-500 outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Email for notification (Optional)</label>
+                                    <input type="email" x-model="notifyEmail" placeholder="your@email.com"
+                                        class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-sm text-slate-200 focus:border-cyan-500 outline-none">
+                                </div>
+                                <button @click="triggerLinkedInAnalysis()" class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold text-sm">
+                                    Analyze LinkedIn
+                                </button>
+                            </div>
+
+                            <!-- Form: Subir Pitch Deck -->
+                            <div x-show="entryMethod === 'pitch_deck'" class="space-y-3" style="display: none;">
+                                <div>
+                                    <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Pitch deck file (PDF or PPTX)</label>
+                                    <input type="file" @change="pitchDeckFile = $event.target.files[0]" class="w-full text-xs text-slate-400 file:mr-2 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-800 file:text-cyan-400 file:hover:bg-slate-700">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Startup website URL (Optional)</label>
+                                    <input type="text" x-model="startupUrl" placeholder="stripe.com"
+                                        class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-sm text-slate-200 focus:border-cyan-500 outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Email for notification (Optional)</label>
+                                    <input type="email" x-model="notifyEmail" placeholder="your@email.com"
+                                        class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-sm text-slate-200 focus:border-cyan-500 outline-none">
+                                </div>
+                                <button @click="triggerPitchDeckAnalysis()" class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold text-sm">
+                                    Upload & Analyze
+                                </button>
+                            </div>
+
                             <div x-show="errorMessage" class="mt-3 p-3 bg-red-950/40 border border-red-900/50 text-red-400 rounded-xl text-xs" x-text="errorMessage"></div>
                         </div>
 

@@ -1,6 +1,5 @@
 import os
 import json
-from vcdiligence.celery_app import celery_app
 from vcdiligence.database import SessionLocal, Organization, Report, Task
 from vcdiligence.logging_config import logger
 from vcdiligence.scraper import SmartScraper
@@ -8,6 +7,8 @@ from vcdiligence.parser import parse_report_meta, merge_devils_advocate
 from vcdiligence.public_apis import get_all_public_insights
 from vcdiligence.pdf_generator import generate_report_pdf
 from vcdiligence.crew import MarketResearchCrew
+from vcdiligence.security import create_access_token
+from vcdiligence.monitoring import send_report_ready_email
 
 # Helper to avoid circular imports later
 def get_adjusted_score_for_org(db, org_id: int, sub_scores: dict, default_score: int, default_reco: str):
@@ -27,9 +28,6 @@ def get_adjusted_score_for_org(db, org_id: int, sub_scores: dict, default_score:
 
         for d in decisions:
             # Map user decision to expected score ranges
-            # "invertimos" -> high scores (>= 75)
-            # "pasamos" -> low scores (< 60)
-            # "en_evaluacion" -> medium scores (60 <= score < 75)
             r = db.query(Report).filter_by(id=d.report_id).first()
             if not r or not r.sub_scores:
                 continue
@@ -85,10 +83,17 @@ def get_adjusted_score_for_org(db, org_id: int, sub_scores: dict, default_score:
         return default_score, default_reco
 
 
-@celery_app.task(name="vcdiligence.tasks.run_due_diligence_task")
-def run_due_diligence_task(domain: str, url: str, org_id: int, user_id: int, user_email: str):
+def run_due_diligence_task(
+    domain: str,
+    url: str,
+    org_id: int,
+    user_id: int,
+    user_email: str,
+    extra_context: dict = None,
+    notify_email: str = None
+):
     """
-    Runs the multi-agent crew as a Celery task, updating DB Task rows.
+    Runs the multi-agent crew as a background task, updating DB Task rows.
     """
     db = SessionLocal()
     try:
@@ -120,6 +125,15 @@ def run_due_diligence_task(domain: str, url: str, org_id: int, user_id: int, use
         market_funding = json.dumps(payload.get("search_insights", {}).get("market_and_funding", []), indent=2)
         team_founders = json.dumps(payload.get("search_insights", {}).get("team_and_founders", []), indent=2)
 
+        # Append LinkedIn context to team founders insights if present
+        if extra_context and "linkedin_data" in extra_context:
+            team_founders += f"\n\nAdditional LinkedIn Context:\n{extra_context['linkedin_data']}"
+
+        # Append Pitch Deck text to homepage summary if present
+        homepage_summary_text = payload.get("homepage_summary", "")
+        if extra_context and "pitch_deck_text" in extra_context:
+            homepage_summary_text += f"\n\nPitch Deck Extracted Context:\n{extra_context['pitch_deck_text']}"
+
         # 2. Update status to analyzing
         task = db.query(Task).filter_by(id=f"{org_id}_{domain}").first()
         if task:
@@ -146,13 +160,13 @@ def run_due_diligence_task(domain: str, url: str, org_id: int, user_id: int, use
         inputs = {
             "company_name": payload.get("company_name", company_name),
             "company_url": payload.get("company_url", url),
-            "homepage_summary": payload.get("homepage_summary", "")[:2500],
+            "homepage_summary": homepage_summary_text[:2500],
             "internal_pages_text": internal_pages_text[:2500],
             "competitor_insights": competitors[:2500],
             "pricing_and_product_insights": pricing_product[:2500],
             "market_and_funding_insights": market_funding[:2500],
             "team_and_founders_insights": team_founders[:2500],
-            "public_api_insights": public_insights_text[:3500] # Pass public records directly to agents!
+            "public_api_insights": public_insights_text[:3500]
         }
 
         # Run CrewAI kickoff
@@ -245,6 +259,23 @@ def run_due_diligence_task(domain: str, url: str, org_id: int, user_id: int, use
             task.message = "Analysis successfully completed!"
             task.result_json = final_data
             db.commit()
+
+        # Send SMTP notification
+        email_to = notify_email or user_email
+        if email_to:
+            try:
+                token = create_access_token(data={"sub": user_email})
+                port = os.getenv("PORT", "10000")
+                base_url = f"http://localhost:{port}"
+                pdf_url = f"{base_url}/reports/{domain}/pdf?token={token}"
+                send_report_ready_email(
+                    to_email=email_to,
+                    company_name=company_name,
+                    score=score,
+                    pdf_url=pdf_url
+                )
+            except Exception as mail_err:
+                logger.error(f"Failed to send task ready email: {str(mail_err)}")
 
     except Exception as e:
         logger.error(f"Error running due diligence background task: {str(e)}", exc_info=True)

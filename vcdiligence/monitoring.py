@@ -11,7 +11,6 @@ from vcdiligence.public_apis import get_all_public_insights, PUBLIC_CACHE_DIR
 from vcdiligence.scraper import SmartScraper
 from vcdiligence.crew import MarketResearchCrew
 from vcdiligence.parser import parse_report_meta, merge_devils_advocate
-from vcdiligence.tasks import get_adjusted_score_for_org
 
 def get_old_cached_insight(api_name: str, company_name: str) -> dict:
     """Reads old cached insight from disk if it exists."""
@@ -220,6 +219,7 @@ def run_continuous_monitoring_job():
                 parsed_score, parsed_recommendation, sub_scores = parse_report_meta(markdown_report)
 
                 # Calibrate score using organization decisions weights
+                from vcdiligence.tasks import get_adjusted_score_for_org
                 new_score, new_reco = get_adjusted_score_for_org(db, r.organization_id, sub_scores, parsed_score, parsed_recommendation)
 
                 # Check if score changed
@@ -292,3 +292,43 @@ def run_continuous_monitoring_job():
         logger.error(f"Error running continuous monitoring job: {str(e)}", exc_info=True)
     finally:
         db.close()
+
+
+def send_report_ready_email(to_email: str, company_name: str, score: int, pdf_url: str):
+    """Sends a notification email to the user when the analysis report is ready."""
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = os.getenv("SMTP_PORT", "587")
+    smtp_user = os.getenv("SMTP_USERNAME")
+    smtp_pass = os.getenv("SMTP_PASSWORD")
+    smtp_from = os.getenv("SMTP_FROM", "noreply@dealscout.ai")
+
+    if not smtp_host or not smtp_user or not smtp_pass:
+        logger.info("SMTP report ready notification skipped: connection details not configured.")
+        return
+
+    subject = f"🚀 [DealScout AI] El reporte de due diligence para {company_name} está listo"
+    body = (
+        f"Hola,\n\n"
+        f"El análisis de due diligence para la empresa '{company_name}' ha concluido exitosamente.\n\n"
+        f"Resultados principales:\n"
+        f"- Score de Riesgo / Inversión: {score}/100\n\n"
+        f"Puedes descargar el reporte completo en formato PDF utilizando el siguiente enlace:\n"
+        f"{pdf_url}\n\n"
+        f"Atentamente,\n"
+        f"El equipo de DealScout AI"
+    )
+
+    try:
+        msg = MIMEText(body, "plain", "utf-8")
+        msg["Subject"] = subject
+        msg["From"] = smtp_from
+        msg["To"] = to_email
+
+        server = smtplib.SMTP(smtp_host, int(smtp_port))
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_from, [to_email], msg.as_string())
+        server.close()
+        logger.info(f"SMTP report ready notification sent to {to_email} successfully.")
+    except Exception as e:
+        logger.error(f"Failed to send SMTP report ready email: {str(e)}", exc_info=True)

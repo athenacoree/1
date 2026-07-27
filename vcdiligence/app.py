@@ -54,16 +54,14 @@ def on_startup():
     init_db()
     db = SessionLocal()
     try:
-        from vcdiligence.celery_app import celery_app
-        # Only cleanup hung tasks on server startup if we are running in synchronous eager mode
-        if celery_app.conf.task_always_eager:
-            hung_tasks = db.query(Task).filter(Task.status.in_(["starting", "scraping", "analyzing"])).all()
-            for t in hung_tasks:
-                t.status = "failed"
-                t.message = "Task interrupted due to server reboot. Please try running again."
-            db.commit()
-            if hung_tasks:
-                logger.info(f"Reset {len(hung_tasks)} hung tasks to failed status on startup.")
+        # Cleanup hung tasks on server startup unconditionally (Celery is replaced by BackgroundTasks)
+        hung_tasks = db.query(Task).filter(Task.status.in_(["starting", "scraping", "analyzing"])).all()
+        for t in hung_tasks:
+            t.status = "failed"
+            t.message = "Task interrupted due to server reboot. Please try running again."
+        db.commit()
+        if hung_tasks:
+            logger.info(f"Reset {len(hung_tasks)} hung tasks to failed status on startup.")
 
         # Start APScheduler for background continuous monitoring
         from apscheduler.schedulers.background import BackgroundScheduler
@@ -81,7 +79,12 @@ def on_startup():
 
 # Pydantic Schemas
 class AnalyzeRequest(BaseModel):
-    url: str
+    url: Optional[str] = None
+    notify_email: Optional[str] = None
+    linkedin_url: Optional[str] = None
+
+class SearchCompanyRequest(BaseModel):
+    company_name: str
 
 class LoginRequest(BaseModel):
     email: str
@@ -192,7 +195,28 @@ def start_analysis(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    url = req.url.strip()
+    url = req.url.strip() if req.url else None
+    extra_ctx = {}
+
+    if not url:
+        if req.linkedin_url:
+            linkedin_info = SmartScraper.scrape_linkedin(req.linkedin_url)
+            url = linkedin_info.get("inferred_url")
+            extra_ctx["linkedin_data"] = linkedin_info.get("linkedin_data")
+            if not url:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Could not infer company official website from LinkedIn URL. Please provide a URL directly."
+                )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Either a website URL or a LinkedIn URL must be provided to start analysis."
+            )
+
+    if req.linkedin_url and "linkedin_data" not in extra_ctx:
+        linkedin_info = SmartScraper.scrape_linkedin(req.linkedin_url)
+        extra_ctx["linkedin_data"] = linkedin_info.get("linkedin_data")
 
     # Block SSRF & validate URL
     validated_url = validate_url_for_ssrf(url)
@@ -271,16 +295,232 @@ def start_analysis(
         task.result_json = None
     db.commit()
 
-    # Trigger Celery asynchronous task
-    run_due_diligence_task.delay(
-        domain,
-        validated_url,
-        current_user.organization_id,
-        current_user.id,
-        current_user.email
+    # Trigger background task natively using FastAPI's BackgroundTasks
+    background_tasks.add_task(
+        run_due_diligence_task,
+        domain=domain,
+        url=validated_url,
+        org_id=current_user.organization_id,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        extra_context=extra_ctx if extra_ctx else None,
+        notify_email=req.notify_email
     )
 
     return {"status": "running", "task_id": task_id}
+
+
+@app.post("/search-company")
+def search_company(
+    req: SearchCompanyRequest,
+    current_user: User = Depends(get_current_user)
+):
+    from urllib.parse import urlparse
+    query = f"{req.company_name} official website"
+    results = SmartScraper.search_duckduckgo(query, count=5)
+
+    candidates = []
+    seen_domains = set()
+
+    for r in results:
+        link = r.get("link", "")
+        if not link:
+            continue
+
+        try:
+            domain = SmartScraper.get_domain(link)
+        except Exception:
+            continue
+
+        if not domain or domain in seen_domains:
+            continue
+
+        # Ignore social media and directories
+        if any(ignored in domain for ignored in ["linkedin.com", "crunchbase.com", "wikipedia.org", "twitter.com", "facebook.com", "youtube.com", "github.com"]):
+            continue
+
+        seen_domains.add(domain)
+
+        # Determine candidate name from search result title
+        title = r.get("title", "")
+        name = req.company_name
+        if title:
+            # Clean up the name part from title
+            name_part = title.split("|")[0].split("-")[0].strip()
+            if name_part:
+                name = name_part
+
+        # canonical base url
+        parsed_url = urlparse(link)
+        base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+
+        candidates.append({
+            "name": name,
+            "url": base_url,
+            "domain": domain,
+            "favicon": f"https://www.google.com/s2/favicons?domain={domain}&sz=64"
+        })
+
+        if len(candidates) >= 3:
+            break
+
+    # Fallback if no clean candidate found
+    if not candidates:
+        domain = f"{req.company_name.lower().replace(' ', '')}.com"
+        candidates.append({
+            "name": req.company_name,
+            "url": f"https://{domain}",
+            "domain": domain,
+            "favicon": f"https://www.google.com/s2/favicons?domain={domain}&sz=64"
+        })
+
+    return {"options": candidates}
+
+
+@app.post("/analyze/upload")
+def upload_and_analyze(
+    background_tasks: BackgroundTasks,
+    pitch_deck: UploadFile = File(...),
+    url: Optional[str] = Form(None),
+    notify_email: Optional[str] = Form(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Save the file temporarily
+    temp_dir = os.path.join("vcdiligence", "static", "uploads")
+    os.makedirs(temp_dir, exist_ok=True)
+    file_path = os.path.join(temp_dir, f"deck_{current_user.organization_id}_{pitch_deck.filename}")
+
+    try:
+        with open(file_path, "wb") as f:
+            f.write(pitch_deck.file.read())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload pitch deck: {str(e)}")
+
+    # Extract text from pitch deck
+    text = ""
+    ext = os.path.splitext(pitch_deck.filename)[1].lower()
+    if ext == ".pdf":
+        text = SmartScraper.extract_text_from_pdf(file_path)
+    elif ext in [".pptx", ".ppt"]:
+        text = SmartScraper.extract_text_from_pptx(file_path)
+    else:
+        # cleanup temporary file
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise HTTPException(status_code=400, detail="Invalid file format. Only PDF and PPTX/PPT are supported.")
+
+    # Clean up the temporary file after text extraction to keep workspace clean
+    if os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+        except Exception:
+            pass
+
+    # Find website URL if not explicitly provided
+    validated_url = None
+    if url:
+        validated_url = validate_url_for_ssrf(url.strip())
+    else:
+        inferred_url = SmartScraper.extract_url_from_text(text)
+        if inferred_url:
+            validated_url = validate_url_for_ssrf(inferred_url)
+        else:
+            # Try to infer from filename as last resort fallback
+            name_fallback = os.path.splitext(pitch_deck.filename)[0].lower()
+            name_fallback = re.sub(r'[^a-z0-9]', '', name_fallback).replace("pitchdeck", "").replace("deck", "").replace("pitch", "")
+            if name_fallback and len(name_fallback) > 1:
+                validated_url = validate_url_for_ssrf(f"https://{name_fallback}.com")
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Could not automatically find any website URL inside the pitch deck. Please provide the company URL manually."
+                )
+
+    domain = SmartScraper.get_domain(validated_url)
+
+    # Isolation / check if report exists
+    existing_report = db.query(Report).filter_by(domain=domain, organization_id=current_user.organization_id).first()
+    if existing_report:
+        cached_result = {
+            "company_name": existing_report.company_name,
+            "domain": domain,
+            "company_url": existing_report.url,
+            "score": existing_report.score,
+            "sub_scores": existing_report.sub_scores,
+            "recommendation": existing_report.recommendation,
+            "report_md": existing_report.report_md,
+            "llm_provider": existing_report.llm_provider,
+            "pdf_path": f"/reports/{domain}/pdf"
+        }
+        task_id = f"{current_user.organization_id}_{domain}"
+        task = db.query(Task).filter_by(id=task_id).first()
+        if not task:
+            task = Task(
+                id=task_id,
+                domain=domain,
+                status="completed",
+                progress=100,
+                message="Loaded cached report from database.",
+                result_json=cached_result,
+                organization_id=current_user.organization_id
+            )
+            db.add(task)
+            db.commit()
+        return {"status": "completed", "task_id": task_id}
+
+    check_rate_limit(organization_id=current_user.organization_id, db=db, limit=10, window_minutes=60)
+
+    task_id = f"{current_user.organization_id}_{domain}"
+    active_task = db.query(Task).filter(
+        Task.id == task_id,
+        Task.status.in_(["starting", "scraping", "analyzing"])
+    ).first()
+    if active_task:
+        return {"status": "running", "task_id": task_id}
+
+    # Record Audit Log
+    audit = AuditLog(
+        user_id=current_user.id,
+        user_email=current_user.email,
+        organization_id=current_user.organization_id,
+        action="analyze_pitch_deck",
+        target_company=domain
+    )
+    db.add(audit)
+
+    task = db.query(Task).filter_by(id=task_id).first()
+    if not task:
+        task = Task(
+            id=task_id,
+            domain=domain,
+            status="starting",
+            progress=5,
+            message="Starting due diligence from pitch deck...",
+            organization_id=current_user.organization_id
+        )
+        db.add(task)
+    else:
+        task.status = "starting"
+        task.progress = 5
+        task.message = "Restarting analysis from pitch deck..."
+        task.result_json = None
+    db.commit()
+
+    # Trigger background tasks
+    background_tasks.add_task(
+        run_due_diligence_task,
+        domain=domain,
+        url=validated_url,
+        org_id=current_user.organization_id,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        extra_context={"pitch_deck_text": text} if text else None,
+        notify_email=notify_email
+    )
+
+    return {"status": "running", "task_id": task_id}
+
 
 @app.get("/status/{task_id}")
 def get_status(task_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):

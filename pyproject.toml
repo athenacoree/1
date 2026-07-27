@@ -20,9 +20,9 @@ dependencies = [
     "pyjwt",
     "playwright",
     "reportlab",
-    "celery",
-    "redis",
     "apscheduler",
+    "python-pptx (>=1.0.2,<2.0.0)",
+    "pypdf",
 ]
 
 [project.scripts]
