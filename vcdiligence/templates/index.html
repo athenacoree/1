@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="es" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DealScout AI — Enterprise VC Due Diligence</title>
+    <title>DealScout AI — Enterprise VC Due Diligence & Validación</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/alpinejs" defer></script>
     <link href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -40,12 +40,6 @@
             border: 1px solid rgba(255, 255, 255, 0.12);
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
         }
-        .text-glow-cyan {
-            text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
-        }
-        .text-glow-emerald {
-            text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
-        }
     </style>
 </head>
 <body class="text-slate-100 min-h-screen flex flex-col font-sans selection:bg-cyan-500 selection:text-slate-900" x-data="{
@@ -60,18 +54,58 @@
     showBenchmark: false,
     userDecision: '',
 
-    // Auth inputs
-    loginEmail: 'analyst@dealscout.ai',
-    loginPassword: 'analystpassword',
+    // Auth & Register inputs
+    isRegistering: false,
+    authEmail: '',
+    authPassword: '',
+    authAccountType: 'personal',
+    authCompanyName: '',
+    authCompanyWebsite: '',
+    authReferredByCode: '',
     authError: '',
 
+    // Public Stats
+    publicStats: null,
+
+    // Public Testimonials
+    publicTestimonials: [],
+    testimonialIndex: 0,
+
+    // Profile updates
+    profilePhotoFile: null,
+    profileCompanyName: '',
+    profileCompanyWebsite: '',
+    showProfileModal: false,
+
+    // Feedback Modal / Invitation (opt-in)
+    showFeedbackModal: false,
+    feedbackComment: '',
+    feedbackShareComment: false,
+    feedbackSharePhoto: false,
+    feedbackShareName: false,
+    feedbackScreenshotFile: null,
+
+    // Error Reporting Widget
+    showErrorModal: false,
+    errorDescription: '',
+    errorUrl: window.location.href,
+    errorScreenshotFile: null,
+
+    // Admin testimonials & users management
+    adminUsers: [],
+    adminTestimonials: [],
+    adminErrorReports: [],
+    showAdminPanel: false,
+
     // Analysis variables
-    entryMethod: 'url', // 'url', 'name', 'linkedin', 'pitch_deck'
+    entryMethod: 'url',
     startupUrl: '',
     companyNameSearch: '',
     linkedinUrl: '',
     pitchDeckFile: null,
     notifyEmail: '',
+    receiveWhatsapp: false,
+    whatsappNumber: '',
     searchCandidates: [],
     isSearchingCompany: false,
 
@@ -87,9 +121,40 @@
     pollInterval: null,
 
     async init() {
+        // Load Public Stats
+        await this.loadPublicStats();
+        // Load Testimonials
+        await this.loadPublicTestimonials();
+
+        // Extract referral from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const ref = urlParams.get('ref');
+        if (ref) {
+            this.authReferredByCode = ref;
+            this.isRegistering = true;
+        }
+
         if (this.token) {
             await this.loadUserProfile();
             await this.loadReports();
+        }
+    },
+
+    async loadPublicStats() {
+        try {
+            const res = await fetch('/stats');
+            this.publicStats = await res.json();
+        } catch (err) {
+            console.error('Failed to load public stats', err);
+        }
+    },
+
+    async loadPublicTestimonials() {
+        try {
+            const res = await fetch('/testimonials');
+            this.publicTestimonials = await res.json();
+        } catch (err) {
+            console.error('Failed to load testimonials', err);
         }
     },
 
@@ -138,7 +203,7 @@
             const response = await fetch('/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: this.loginEmail, password: this.loginPassword })
+                body: JSON.stringify({ email: this.authEmail, password: this.authPassword })
             });
             const data = await response.json();
             if (response.status !== 200) {
@@ -148,8 +213,38 @@
             localStorage.setItem('token', this.token);
             await this.loadUserProfile();
             await this.loadReports();
+            await this.loadPublicStats();
         } catch (err) {
             this.authError = err.message || 'Incorrect credentials.';
+        }
+    },
+
+    async handleRegister() {
+        this.authError = '';
+        try {
+            const response = await fetch('/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: this.authEmail,
+                    password: this.authPassword,
+                    account_type: this.authAccountType,
+                    company_name: this.authAccountType === 'empresa' ? this.authCompanyName : null,
+                    company_website: this.authAccountType === 'empresa' ? this.authCompanyWebsite : null,
+                    referred_by_code: this.authReferredByCode || null
+                })
+            });
+            const data = await response.json();
+            if (response.status !== 200) {
+                throw new Error(data.detail || 'Registration failed');
+            }
+            this.token = data.access_token;
+            localStorage.setItem('token', this.token);
+            await this.loadUserProfile();
+            await this.loadReports();
+            await this.loadPublicStats();
+        } catch (err) {
+            this.authError = err.message || 'Registration details incorrect.';
         }
     },
 
@@ -159,6 +254,7 @@
         this.reports = [];
         this.showResult = false;
         this.resultData = null;
+        this.showAdminPanel = false;
         localStorage.removeItem('token');
     },
 
@@ -172,7 +268,9 @@
                 return;
             }
             this.user = await res.json();
-            this.settingsName = this.user.organization.company_name;
+            this.profileCompanyName = this.user.company_name || '';
+            this.profileCompanyWebsite = this.user.company_website || '';
+            this.settingsName = this.user.organization ? this.user.organization.company_name : 'DealScout Capital';
         } catch (err) {
             console.error('Failed to load profile', err);
         }
@@ -208,6 +306,148 @@
             alert('Settings updated successfully!');
             await this.loadUserProfile();
             this.showSettings = false;
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    async saveProfile() {
+        const formData = new FormData();
+        if (this.profileCompanyName) formData.append('company_name', this.profileCompanyName);
+        if (this.profileCompanyWebsite) formData.append('company_website', this.profileCompanyWebsite);
+        if (this.profilePhotoFile) formData.append('photo', this.profilePhotoFile);
+
+        try {
+            const res = await fetch('/profile/update', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token },
+                body: formData
+            });
+            const data = await res.json();
+            if (res.status !== 200) {
+                throw new Error(data.detail || 'Failed to update profile');
+            }
+            alert('Profile updated successfully!');
+            await this.loadUserProfile();
+            await this.loadPublicStats();
+            this.showProfileModal = false;
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    async submitTestimonial() {
+        const formData = new FormData();
+        formData.append('comment', this.feedbackComment);
+        formData.append('share_comment', this.feedbackShareComment);
+        formData.append('share_photo', this.feedbackSharePhoto);
+        formData.append('share_name', this.feedbackShareName);
+        if (this.feedbackScreenshotFile) {
+            formData.append('screenshot', this.feedbackScreenshotFile);
+        }
+
+        try {
+            const res = await fetch('/testimonials', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token },
+                body: formData
+            });
+            const data = await res.json();
+            if (res.status !== 200) {
+                throw new Error(data.detail || 'Failed to submit testimonial');
+            }
+            alert('¡Gracias por tus comentarios! Tu feedback ha sido registrado.');
+            this.feedbackComment = '';
+            this.feedbackShareComment = false;
+            this.feedbackSharePhoto = false;
+            this.feedbackShareName = false;
+            this.feedbackScreenshotFile = null;
+            this.showFeedbackModal = false;
+            await this.loadPublicTestimonials();
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    async submitErrorReport() {
+        if (!this.errorDescription.trim()) {
+            alert('Por favor, ingresa una descripción del problema.');
+            return;
+        }
+        const formData = new FormData();
+        formData.append('description', this.errorDescription);
+        formData.append('url', this.errorUrl);
+        if (this.errorScreenshotFile) {
+            formData.append('screenshot', this.errorScreenshotFile);
+        }
+
+        try {
+            const res = await fetch('/error-reports', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token },
+                body: formData
+            });
+            const data = await res.json();
+            if (res.status !== 200) {
+                throw new Error(data.detail || 'Failed to submit report');
+            }
+            alert('¡Reporte enviado! Los administradores han sido notificados por correo.');
+            this.errorDescription = '';
+            this.errorScreenshotFile = null;
+            this.showErrorModal = false;
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    async loadAdminData() {
+        try {
+            const headers = { 'Authorization': 'Bearer ' + this.token };
+            const uRes = await fetch('/admin/users', { headers });
+            this.adminUsers = await uRes.json();
+
+            const tRes = await fetch('/admin/testimonials', { headers });
+            this.adminTestimonials = await tRes.json();
+
+            const eRes = await fetch('/admin/error-reports', { headers });
+            this.adminErrorReports = await eRes.json();
+        } catch (err) {
+            console.error('Failed to load admin data', err);
+        }
+    },
+
+    async toggleUserVerification(userId, isVerified) {
+        try {
+            const formData = new FormData();
+            formData.append('verified', isVerified);
+            const res = await fetch(`/admin/users/${userId}/verify-by-admin`, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token },
+                body: formData
+            });
+            if (res.status === 200) {
+                alert('User verification status updated!');
+                await this.loadAdminData();
+            }
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    async moderateTestimonial(testimonialId, approve) {
+        try {
+            const formData = new FormData();
+            formData.append('approve', approve);
+            const res = await fetch(`/admin/testimonials/${testimonialId}/approve`, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token },
+                body: formData
+            });
+            if (res.status === 200) {
+                alert('Testimonial moderation updated!');
+                await this.loadAdminData();
+                await this.loadPublicTestimonials();
+            }
         } catch (err) {
             alert(err.message);
         }
@@ -257,16 +497,22 @@
         }
 
         try {
+            const payload = {
+                url: this.startupUrl,
+                notify_email: this.notifyEmail || null
+            };
+            if (this.receiveWhatsapp && this.user && this.user.verified_by_admin) {
+                payload.receive_whatsapp = true;
+                payload.whatsapp_number = this.whatsappNumber;
+            }
+
             const response = await fetch('/analyze', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': 'Bearer ' + this.token
                 },
-                body: JSON.stringify({
-                    url: this.startupUrl,
-                    notify_email: this.notifyEmail || null
-                })
+                body: JSON.stringify(payload)
             });
 
             const data = await response.json();
@@ -301,16 +547,22 @@
         }
 
         try {
+            const payload = {
+                linkedin_url: this.linkedinUrl,
+                notify_email: this.notifyEmail || null
+            };
+            if (this.receiveWhatsapp && this.user && this.user.verified_by_admin) {
+                payload.receive_whatsapp = true;
+                payload.whatsapp_number = this.whatsappNumber;
+            }
+
             const response = await fetch('/analyze', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': 'Bearer ' + this.token
                 },
-                body: JSON.stringify({
-                    linkedin_url: this.linkedinUrl,
-                    notify_email: this.notifyEmail || null
-                })
+                body: JSON.stringify(payload)
             });
 
             const data = await response.json();
@@ -351,6 +603,10 @@
         }
         if (this.notifyEmail) {
             formData.append('notify_email', this.notifyEmail);
+        }
+        if (this.receiveWhatsapp && this.user && this.user.verified_by_admin) {
+            formData.append('receive_whatsapp', 'true');
+            formData.append('whatsapp_number', this.whatsappNumber);
         }
 
         try {
@@ -398,7 +654,9 @@
                     this.llmUsed = data.result.llm_provider || 'OpenRouter';
                     this.isLoading = false;
                     this.showResult = true;
+                    this.showFeedbackModal = true; // Ask for opt-in feedback on complete!
                     await this.loadReports();
+                    await this.loadPublicStats();
                 } else if (data.status === 'failed') {
                     clearInterval(this.pollInterval);
                     this.errorMessage = data.message;
@@ -448,6 +706,14 @@
     }
 }">
 
+    <!-- Floating Report a Bug Widget -->
+    <button @click="showErrorModal = true" class="fixed bottom-6 right-6 z-40 bg-red-600 hover:bg-red-500 text-white font-bold py-3 px-5 rounded-full shadow-2xl flex items-center space-x-2 border border-red-500/20">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+        </svg>
+        <span>Reportar Problema</span>
+    </button>
+
     <!-- Header -->
     <header class="w-full max-w-6xl mx-auto px-6 py-6 flex justify-between items-center z-10">
         <div class="flex items-center space-x-3">
@@ -455,30 +721,44 @@
                 <span class="text-slate-950 font-bold text-xl tracking-tighter">DS</span>
             </div>
             <div>
-                <h1 class="font-bold text-lg tracking-tight bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent" x-text="user ? user.organization.company_name : 'DealScout AI'"></h1>
+                <h1 class="font-bold text-lg tracking-tight bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent" x-text="user ? settingsName : 'DealScout AI'"></h1>
                 <p class="text-xs text-slate-400">Enterprise Due Diligence Platform</p>
             </div>
         </div>
         <div class="flex items-center space-x-4">
             <template x-if="user">
-                <div class="flex items-center space-x-4">
-                    <span class="text-xs text-slate-400 flex items-center bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-full backdrop-blur-md">
-                        <span class="w-2 h-2 rounded-full bg-cyan-400 mr-2 animate-pulse"></span>
+                <div class="flex items-center space-x-2 sm:space-x-4">
+                    <span @click="showProfileModal = true" class="text-xs text-slate-400 flex items-center bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-full backdrop-blur-md cursor-pointer hover:border-cyan-500">
+                        <template x-if="user.profile_photo_path">
+                            <img :src="user.profile_photo_path" class="w-5 h-5 rounded-full mr-2 object-cover" />
+                        </template>
+                        <template x-if="!user.profile_photo_path">
+                            <span class="w-2 h-2 rounded-full bg-cyan-400 mr-2 animate-pulse"></span>
+                        </template>
                         <span x-text="user.email"></span>
+                        <template x-if="user.verified_domain">
+                            <span class="ml-1.5 text-[9px] bg-emerald-500/20 text-emerald-400 px-1 rounded">Dominio Verificado</span>
+                        </template>
+                        <template x-if="user.verified_by_admin">
+                            <span class="ml-1.5 text-[9px] bg-cyan-500/20 text-cyan-400 px-1 rounded">Empresa VIP</span>
+                        </template>
                     </span>
                     <template x-if="user && user.role === 'administrador'">
-                        <button @click="await loadBenchmarks(); showBenchmark = true" class="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg font-semibold text-emerald-400 border border-emerald-400/20">
-                            Precision Scorecard
+                        <button @click="await loadBenchmarks(); showBenchmark = true" class="text-[11px] sm:text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg font-semibold text-emerald-400 border border-emerald-400/20">
+                            Benchmarks
+                        </button>
+                        <button @click="await loadAdminData(); showAdminPanel = true" class="text-[11px] sm:text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg font-semibold text-purple-400 border border-purple-400/20">
+                            Admin Moderación
                         </button>
                     </template>
-                    <button @click="showComparison = true" class="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg font-semibold text-cyan-400 border border-cyan-400/20">
-                        Compare Deals
+                    <button @click="showComparison = true" class="text-[11px] sm:text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg font-semibold text-cyan-400 border border-cyan-400/20">
+                        Comparar
                     </button>
-                    <button @click="showSettings = true" class="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg font-semibold">
-                        Settings
+                    <button @click="showSettings = true" class="text-[11px] sm:text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg font-semibold">
+                        Ajustes
                     </button>
-                    <button @click="handleLogout()" class="text-xs bg-red-950/40 hover:bg-red-900/40 text-red-400 px-3 py-1.5 rounded-lg font-semibold border border-red-500/10">
-                        Logout
+                    <button @click="handleLogout()" class="text-[11px] sm:text-xs bg-red-950/40 hover:bg-red-900/40 text-red-400 px-3 py-1.5 rounded-lg font-semibold border border-red-500/10">
+                        Salir
                     </button>
                 </div>
             </template>
@@ -487,36 +767,139 @@
 
     <main class="flex-grow w-full max-w-6xl mx-auto px-6 py-8 z-10 flex flex-col items-center justify-center">
 
-        <!-- Login Form -->
-        <template x-if="!token">
-            <div class="w-full max-w-md">
-                <div class="glass p-8 rounded-3xl shadow-2xl relative overflow-hidden text-center">
-                    <h2 class="text-2xl font-black mb-1 text-white">Venture Intelligence Portal</h2>
-                    <p class="text-slate-400 text-xs mb-6">Enter credentials provided by your fund admin</p>
-
-                    <div class="space-y-4 text-left">
-                        <div>
-                            <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Email Address</label>
-                            <input type="email" x-model="loginEmail" class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-sm focus:border-cyan-500/50 outline-none text-slate-200">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Password</label>
-                            <input type="password" x-model="loginPassword" class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-sm focus:border-cyan-500/50 outline-none text-slate-200">
-                        </div>
-
-                        <div x-show="authError" class="p-3 bg-red-950/40 border border-red-900/50 text-red-400 rounded-xl text-xs" x-text="authError"></div>
-
-                        <button @click="handleLogin()" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold transition-all shadow-lg text-sm">
-                            Access Portal
-                        </button>
-                    </div>
-
-                    <div class="mt-6 pt-4 border-t border-slate-500 text-[10px] text-slate-500">
-                        Demo Accounts:<br/>
-                        Admin: <span class="text-cyan-400">admin@dealscout.ai</span> (adminpassword)<br/>
-                        Analyst: <span class="text-emerald-400">analyst@dealscout.ai</span> (analystpassword)
+        <!-- Early Validation Banner (Unauthenticated only or Stats Hidden fallback) -->
+        <template x-if="!token || (publicStats && !publicStats.show_stats)">
+            <div class="w-full mb-8">
+                <div class="p-5 rounded-2xl bg-cyan-950/20 border border-cyan-900/50 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
+                    <div>
+                        <span class="text-[10px] font-bold uppercase tracking-widest bg-cyan-400/20 text-cyan-400 px-2.5 py-1 rounded-full">Fase de Validación Temprana</span>
+                        <h3 class="text-white font-bold text-md mt-2">Bienvenido a la versión preliminar de DealScout AI</h3>
+                        <p class="text-slate-400 text-xs mt-1">Estamos activamente optimizando nuestros agentes. Nuevas herramientas de automatización de reportes se integrarán próximamente de forma automática.</p>
                     </div>
                 </div>
+            </div>
+        </template>
+
+        <!-- Unauthenticated Public Landing -->
+        <template x-if="!token">
+            <div class="w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+
+                <!-- Left: Product Value & Social Proof / Stats fallback -->
+                <div class="space-y-8">
+                    <div>
+                        <h2 class="text-4xl sm:text-5xl font-extrabold text-white leading-tight">
+                            Scoutea y Valida Startups <br/>
+                            <span class="bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">con Inteligencia de Fondos de Elite</span>
+                        </h2>
+                        <p class="text-slate-400 text-sm mt-4 leading-relaxed">
+                            Una red de 6 agentes autónomos construida con CrewAI. Analiza mercados, detecta riesgos de forma proactiva, y calibra scores basados en tus propias tesis de inversión.
+                        </p>
+                    </div>
+
+                    <!-- Public Counters Block (Only if show_stats is True) -->
+                    <template x-if="publicStats && publicStats.show_stats">
+                        <div class="p-6 rounded-2xl bg-slate-900/50 border border-slate-800/80">
+                            <h4 class="text-xs uppercase font-bold text-slate-400 mb-4 tracking-wider">Actividad de la Plataforma</h4>
+                            <div class="grid grid-cols-3 gap-4 text-center">
+                                <div class="p-3 bg-slate-950/50 border border-slate-800 rounded-xl">
+                                    <div class="text-2xl font-black text-cyan-400" x-text="publicStats.total_users"></div>
+                                    <div class="text-[9px] uppercase font-bold text-slate-500 mt-1">Usuarios</div>
+                                </div>
+                                <div class="p-3 bg-slate-950/50 border border-slate-800 rounded-xl">
+                                    <div class="text-2xl font-black text-emerald-400" x-text="publicStats.split.empresa"></div>
+                                    <div class="text-[9px] uppercase font-bold text-slate-500 mt-1">Empresas</div>
+                                </div>
+                                <div class="p-3 bg-slate-950/50 border border-slate-800 rounded-xl">
+                                    <div class="text-2xl font-black text-white" x-text="publicStats.analyzed_companies"></div>
+                                    <div class="text-[9px] uppercase font-bold text-slate-500 mt-1">Análisis Realizados</div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- Testimonial Carousel -->
+                    <template x-if="publicTestimonials.length > 0">
+                        <div class="p-6 rounded-2xl bg-slate-900/50 border border-slate-800/80 relative overflow-hidden">
+                            <h4 class="text-xs uppercase font-bold text-slate-400 mb-3 tracking-wider">Prueba Social Directa</h4>
+                            <div class="space-y-3">
+                                <p class="text-slate-300 text-xs italic" x-text="'&ldquo;' + publicTestimonials[testimonialIndex].comment + '&rdquo;'"></p>
+                                <div class="flex items-center space-x-2 pt-2">
+                                    <template x-if="publicTestimonials[testimonialIndex].profile_photo_path">
+                                        <img :src="publicTestimonials[testimonialIndex].profile_photo_path" class="w-6 h-6 rounded-full object-cover" />
+                                    </template>
+                                    <span class="text-[10px] font-bold text-slate-400" x-text="publicTestimonials[testimonialIndex].user_name"></span>
+                                </div>
+                                <template x-if="publicTestimonials[testimonialIndex].screenshot_path">
+                                    <a :href="publicTestimonials[testimonialIndex].screenshot_path" target="_blank" class="text-[9px] text-cyan-400 underline block mt-2">Ver captura del testimonio</a>
+                                </template>
+                            </div>
+                            <!-- Carousel Navigation -->
+                            <div class="flex justify-end space-x-1.5 mt-3">
+                                <button @click="testimonialIndex = (testimonialIndex - 1 + publicTestimonials.length) % publicTestimonials.length" class="p-1 bg-slate-800 rounded hover:bg-slate-700 text-slate-400">&larr;</button>
+                                <button @click="testimonialIndex = (testimonialIndex + 1) % publicTestimonials.length" class="p-1 bg-slate-800 rounded hover:bg-slate-700 text-slate-400">&rarr;</button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Right: Auth Form with Register toggles -->
+                <div class="w-full max-w-md mx-auto">
+                    <div class="glass p-8 rounded-3xl shadow-2xl relative overflow-hidden">
+
+                        <!-- Tabs -->
+                        <div class="flex border-b border-slate-800/80 mb-6 bg-slate-950/40 rounded-xl p-1">
+                            <button @click="isRegistering = false; authError = ''" :class="!isRegistering ? 'bg-slate-800 text-cyan-400' : 'text-slate-400'" class="flex-grow py-2 text-center text-xs font-bold rounded-lg transition-all">Iniciar Sesión</button>
+                            <button @click="isRegistering = true; authError = ''" :class="isRegistering ? 'bg-slate-800 text-cyan-400' : 'text-slate-400'" class="flex-grow py-2 text-center text-xs font-bold rounded-lg transition-all">Registrarse</button>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Email Address</label>
+                                <input type="email" x-model="authEmail" class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-sm focus:border-cyan-500/50 outline-none text-slate-200">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Password</label>
+                                <input type="password" x-model="authPassword" class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-sm focus:border-cyan-500/50 outline-none text-slate-200">
+                            </div>
+
+                            <!-- Registration Specifics -->
+                            <template x-if="isRegistering">
+                                <div class="space-y-4 pt-2">
+                                    <div>
+                                        <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Tipo de Cuenta</label>
+                                        <select x-model="authAccountType" class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-sm focus:border-cyan-500/50 outline-none text-slate-200">
+                                            <option value="personal">Personal (Evaluaciones individuales)</option>
+                                            <option value="empresa">Empresa (White-Label, Insignias y Análisis Avanzado)</option>
+                                        </select>
+                                    </div>
+                                    <template x-if="authAccountType === 'empresa'">
+                                        <div class="space-y-4">
+                                            <div>
+                                                <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Nombre de la Empresa</label>
+                                                <input type="text" x-model="authCompanyName" placeholder="Mi Empresa S.A." class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-sm focus:border-cyan-500/50 outline-none text-slate-200">
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Sitio Web Oficial</label>
+                                                <input type="text" x-model="authCompanyWebsite" placeholder="miempresa.com" class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-sm focus:border-cyan-500/50 outline-none text-slate-200">
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <div>
+                                        <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Código de Referido (Opcional)</label>
+                                        <input type="text" x-model="authReferredByCode" placeholder="REF123" class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-sm focus:border-cyan-500/50 outline-none text-slate-200">
+                                    </div>
+                                </div>
+                            </template>
+
+                            <div x-show="authError" class="p-3 bg-red-950/40 border border-red-900/50 text-red-400 rounded-xl text-xs" x-text="authError"></div>
+
+                            <button @click="isRegistering ? handleRegister() : handleLogin()" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold transition-all shadow-lg text-sm">
+                                <span x-text="isRegistering ? 'Crear Cuenta y Acceder' : 'Acceder al Portal'"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </template>
 
@@ -529,7 +912,7 @@
                     <!-- Left Sidebar (Deals List / Settings) -->
                     <div class="lg:col-span-1 space-y-6">
                         <div class="glass p-6 rounded-2xl">
-                            <h3 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Start New Analysis</h3>
+                            <h3 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Empezar Nuevo Análisis</h3>
 
                             <!-- Method Tabs -->
                             <div class="flex border-b border-slate-800 mb-4 bg-slate-950/40 rounded-lg p-1">
@@ -551,8 +934,22 @@
                                     <input type="email" x-model="notifyEmail" placeholder="your@email.com"
                                         class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-sm text-slate-200 focus:border-cyan-500 outline-none">
                                 </div>
+
+                                <!-- Optional WhatsApp delivery form -->
+                                <template x-if="user && user.verified_by_admin">
+                                    <div class="space-y-2 pt-2 border-t border-slate-800">
+                                        <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+                                            <input type="checkbox" x-model="receiveWhatsapp" class="rounded bg-slate-900 border-slate-800 text-cyan-500 focus:ring-cyan-500">
+                                            <span>Recibir reporte por WhatsApp</span>
+                                        </label>
+                                        <template x-if="receiveWhatsapp">
+                                            <input type="text" x-model="whatsappNumber" placeholder="+5351080807" class="w-full px-4 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 outline-none">
+                                        </template>
+                                    </div>
+                                </template>
+
                                 <button @click="triggerAnalysis()" class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold text-sm">
-                                    Analyze URL
+                                    Analizar URL
                                 </button>
                             </div>
 
@@ -564,7 +961,7 @@
                                         class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-sm text-slate-200 focus:border-cyan-500 outline-none">
                                 </div>
                                 <button @click="handleSearchCompany()" class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold text-sm flex justify-center items-center">
-                                    <span x-show="!isSearchingCompany">Search Candidates</span>
+                                    <span x-show="!isSearchingCompany">Buscar Candidatos</span>
                                     <svg x-show="isSearchingCompany" class="animate-spin h-5 w-5 text-slate-950" fill="none" viewBox="0 0 24 24">
                                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -574,7 +971,7 @@
                                 <!-- Candidates Options -->
                                 <template x-if="searchCandidates.length > 0">
                                     <div class="mt-4 pt-3 border-t border-slate-800/80 space-y-2">
-                                        <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Select company candidate</label>
+                                        <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Seleccionar Candidato</label>
                                         <template x-for="c in searchCandidates" :key="c.url">
                                             <div @click="triggerAnalysis(c.url)" class="p-3 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-cyan-500/50 cursor-pointer flex items-center space-x-3 transition-all">
                                                 <img :src="c.favicon" class="w-6 h-6 rounded" onerror="this.src='https://www.google.com/s2/favicons?domain=stripe.com&sz=64'"/>
@@ -601,7 +998,7 @@
                                         class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-sm text-slate-200 focus:border-cyan-500 outline-none">
                                 </div>
                                 <button @click="triggerLinkedInAnalysis()" class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold text-sm">
-                                    Analyze LinkedIn
+                                    Analizar LinkedIn
                                 </button>
                             </div>
 
@@ -622,7 +1019,7 @@
                                         class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-sm text-slate-200 focus:border-cyan-500 outline-none">
                                 </div>
                                 <button @click="triggerPitchDeckAnalysis()" class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold text-sm">
-                                    Upload & Analyze
+                                    Subir y Analizar
                                 </button>
                             </div>
 
@@ -631,9 +1028,9 @@
 
                         <!-- Scraped Deals Registry -->
                         <div class="glass p-6 rounded-2xl max-h-[400px] overflow-y-auto">
-                            <h3 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Deals Registry</h3>
+                            <h3 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Historial de Análisis</h3>
                             <template x-if="reports.length === 0">
-                                <p class="text-xs text-slate-500">No deals analyzed yet for this organization.</p>
+                                <p class="text-xs text-slate-500">Ningún deal analizado para esta organización.</p>
                             </template>
                             <div class="space-y-2">
                                 <template x-for="rep in reports" :key="rep.id">
@@ -669,12 +1066,11 @@
                                 </svg>
                                 <div class="absolute inset-0 flex items-center justify-center font-bold text-sm text-slate-400" x-text="progressPercent + '%'"></div>
                             </div>
-                            <h3 class="text-xl font-bold mb-2 bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">Analyzing Startup</h3>
+                            <h3 class="text-xl font-bold mb-2 bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">Analizando Startup</h3>
                             <p class="text-slate-400 text-sm mb-6" x-text="statusMessage"></p>
                             <div class="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
                                 <div class="bg-gradient-to-r from-cyan-500 to-emerald-500 h-full transition-all duration-500" :style="'width: ' + progressPercent + '%'"></div>
                             </div>
-                            <p class="text-xs text-slate-500 mt-4">We are running live Playwright fallback renderings, SEC Edgar profiles, corporate registry matches, and a 6-agent CrewAI orchestration. Do not close this tab.</p>
                         </div>
 
                         <!-- Results Dashboard -->
@@ -792,6 +1188,272 @@
         </template>
 
     </main>
+
+    <!-- Error/Bug Report Modal -->
+    <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4" x-show="showErrorModal" style="display: none;">
+        <div class="glass p-8 rounded-3xl max-w-md w-full text-left">
+            <h3 class="text-xl font-bold mb-4 text-white flex items-center space-x-2">
+                <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+                <span>Reportar un Problema</span>
+            </h3>
+
+            <div class="space-y-4 text-xs">
+                <div>
+                    <label class="block font-bold uppercase text-slate-400 mb-1">Pantalla / URL</label>
+                    <input type="text" x-model="errorUrl" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl outline-none focus:border-cyan-500">
+                </div>
+                <div>
+                    <label class="block font-bold uppercase text-slate-400 mb-1">Descripción del Problema</label>
+                    <textarea x-model="errorDescription" rows="4" placeholder="Describe brevemente qué sucedió o qué elemento se desalineó..." class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl outline-none focus:border-cyan-500"></textarea>
+                </div>
+                <div>
+                    <label class="block font-bold uppercase text-slate-400 mb-1">Captura de Pantalla (Opcional)</label>
+                    <input type="file" @change="errorScreenshotFile = $event.target.files[0]" class="w-full text-slate-400">
+                </div>
+
+                <div class="flex gap-2 pt-4">
+                    <button @click="submitErrorReport()" class="flex-grow py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl">
+                        Enviar Reporte
+                    </button>
+                    <button @click="showErrorModal = false" class="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Opt-In Testimonials Modal (Feedback invitation) -->
+    <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4" x-show="showFeedbackModal" style="display: none;">
+        <div class="glass p-8 rounded-3xl max-w-lg w-full text-left">
+            <h3 class="text-xl font-bold mb-2 text-white">¡Análisis Completo! Deja tu experiencia</h3>
+            <p class="text-xs text-slate-400 mb-4">Ayúdanos a mejorar DealScout AI compartiendo tu opinión.</p>
+
+            <div class="space-y-4 text-xs">
+                <div>
+                    <label class="block font-bold uppercase text-slate-400 mb-1">Comentario</label>
+                    <textarea x-model="feedbackComment" rows="3" placeholder="¿Cómo calificarías tu experiencia?" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl outline-none focus:border-cyan-500"></textarea>
+                </div>
+
+                <div class="p-3 bg-slate-950/50 rounded-xl border border-slate-800/80 space-y-3">
+                    <h4 class="font-bold text-slate-300">Ajustes de Privacidad (Opt-In Obligatorio)</h4>
+                    <p class="text-[10px] text-slate-500 mb-2">Nunca se compartirá qué empresas has analizado. Solo se publicará lo que marques activamente a continuación:</p>
+
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" x-model="feedbackShareComment" class="rounded bg-slate-900 border-slate-800 text-cyan-500 focus:ring-cyan-500">
+                        <span>Hacer público mi comentario</span>
+                    </label>
+
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" x-model="feedbackSharePhoto" class="rounded bg-slate-900 border-slate-800 text-cyan-500 focus:ring-cyan-500">
+                        <span>Mostrar mi foto de perfil junto al comentario</span>
+                    </label>
+
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" x-model="feedbackShareName" class="rounded bg-slate-900 border-slate-800 text-cyan-500 focus:ring-cyan-500">
+                        <span>Mostrar mi nombre (o nombre de empresa) junto al comentario</span>
+                    </label>
+                </div>
+
+                <div>
+                    <label class="block font-bold uppercase text-slate-400 mb-1">Subir captura de testimonio (Opcional, requiere moderación)</label>
+                    <input type="file" @change="feedbackScreenshotFile = $event.target.files[0]" class="w-full text-slate-400">
+                </div>
+
+                <div class="flex gap-2 pt-4">
+                    <button @click="submitTestimonial()" class="flex-grow py-3 bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold rounded-xl">
+                        Enviar Feedback
+                    </button>
+                    <button @click="showFeedbackModal = false" class="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl">
+                        Descartar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Profile Modal with Referral Links -->
+    <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4" x-show="showProfileModal" style="display: none;">
+        <div class="glass p-8 rounded-3xl max-w-md w-full text-left" x-data="{ copied: false }">
+            <h3 class="text-xl font-bold mb-4 text-white">Editar Perfil de Usuario</h3>
+
+            <div class="space-y-4 text-xs">
+                <div>
+                    <label class="block font-bold uppercase text-slate-400 mb-1">Nombre de la Empresa</label>
+                    <input type="text" x-model="profileCompanyName" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl outline-none focus:border-cyan-500">
+                </div>
+                <div>
+                    <label class="block font-bold uppercase text-slate-400 mb-1">Sitio Web Oficial</label>
+                    <input type="text" x-model="profileCompanyWebsite" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl outline-none focus:border-cyan-500">
+                </div>
+                <div>
+                    <label class="block font-bold uppercase text-slate-400 mb-1">Foto de Perfil</label>
+                    <input type="file" @change="profilePhotoFile = $event.target.files[0]" class="w-full text-slate-400">
+                </div>
+
+                <!-- Referral Section -->
+                <div class="p-3 bg-slate-950/50 rounded-xl border border-slate-800/80 space-y-2">
+                    <h4 class="font-bold text-slate-300">Programa de Referidos</h4>
+                    <p class="text-[10px] text-slate-500">Comparte tu enlace único para invitar a otros analistas y obtener acceso a beneficios VIP.</p>
+                    <div class="flex items-center space-x-2 mt-2">
+                        <input type="text" readonly :value="window.location.origin + '/?ref=' + (user ? user.referral_code : '')" class="flex-grow bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg text-slate-300 outline-none text-[11px]" id="ref-link-field">
+                        <button @click="navigator.clipboard.writeText(document.getElementById('ref-link-field').value); copied = true; setTimeout(() => copied = false, 2000)" class="bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg font-semibold text-cyan-400 border border-cyan-400/20">
+                            <span x-text="copied ? 'Copiado!' : 'Copiar'"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex gap-2 pt-4">
+                    <button @click="saveProfile()" class="flex-grow py-3 bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold rounded-xl">
+                        Guardar Perfil
+                    </button>
+                    <button @click="showProfileModal = false" class="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Moderation Panel -->
+    <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto" x-show="showAdminPanel" style="display: none;">
+        <div class="glass-premium p-8 rounded-3xl max-w-5xl w-full text-left">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-black text-white">Panel de Moderación & Validación Admin</h3>
+                <button @click="showAdminPanel = false" class="text-slate-400 hover:text-white font-bold text-sm">Cerrar</button>
+            </div>
+
+            <div class="grid grid-cols-1 gap-8 text-xs">
+
+                <!-- Section 1: Users & Domains Verification -->
+                <div class="p-6 bg-slate-900/40 border border-slate-800 rounded-2xl">
+                    <h4 class="text-sm font-bold text-cyan-400 uppercase tracking-wider mb-3">Verificación de Cuentas Empresa</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b border-slate-800 text-slate-400">
+                                    <th class="py-2 px-3">Email</th>
+                                    <th class="py-2 px-3">Empresa</th>
+                                    <th class="py-2 px-3">Sitio Web</th>
+                                    <th class="py-2 px-3">Verif. Auto</th>
+                                    <th class="py-2 px-3">Verif. Admin (WhatsApp)</th>
+                                    <th class="py-2 px-3">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="u in adminUsers" :key="u.id">
+                                    <tr class="border-b border-slate-800/40 hover:bg-slate-800/20">
+                                        <td class="py-2.5 px-3" x-text="u.email"></td>
+                                        <td class="py-2.5 px-3" x-text="u.company_name || 'N/A'"></td>
+                                        <td class="py-2.5 px-3" x-text="u.company_website || 'N/A'"></td>
+                                        <td class="py-2.5 px-3">
+                                            <span class="px-1.5 py-0.5 rounded text-[10px]" :class="u.verified_domain ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'" x-text="u.verified_domain ? 'Dominio Match' : 'No Coincide'"></span>
+                                        </td>
+                                        <td class="py-2.5 px-3">
+                                            <span class="px-1.5 py-0.5 rounded text-[10px]" :class="u.verified_by_admin ? 'bg-cyan-500/20 text-cyan-400' : 'bg-slate-800 text-slate-500'" x-text="u.verified_by_admin ? 'VIP Activo' : 'Inactivo'"></span>
+                                        </td>
+                                        <td class="py-2.5 px-3">
+                                            <button @click="toggleUserVerification(u.id, !u.verified_by_admin)" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700" x-text="u.verified_by_admin ? 'Quitar VIP' : 'Dar VIP (WhatsApp)'"></button>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Section 2: Testimonials Screenshots Moderation -->
+                <div class="p-6 bg-slate-900/40 border border-slate-800 rounded-2xl">
+                    <h4 class="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-3">Moderación de Testimonios y Capturas</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b border-slate-800 text-slate-400">
+                                    <th class="py-2 px-3">Usuario</th>
+                                    <th class="py-2 px-3">Comentario</th>
+                                    <th class="py-2 px-3">Privacidad</th>
+                                    <th class="py-2 px-3">Captura</th>
+                                    <th class="py-2 px-3">Estado</th>
+                                    <th class="py-2 px-3">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="t in adminTestimonials" :key="t.id">
+                                    <tr class="border-b border-slate-800/40 hover:bg-slate-800/20">
+                                        <td class="py-2.5 px-3" x-text="t.email"></td>
+                                        <td class="py-2.5 px-3 truncate max-w-xs" x-text="t.comment"></td>
+                                        <td class="py-2.5 px-3">
+                                            <div class="space-y-0.5 text-[10px]">
+                                                <div x-text="'Comment: ' + t.share_comment"></div>
+                                                <div x-text="'Photo: ' + t.share_photo"></div>
+                                                <div x-text="'Name: ' + t.share_name"></div>
+                                            </div>
+                                        </td>
+                                        <td class="py-2.5 px-3">
+                                            <template x-if="t.screenshot_path">
+                                                <a :href="t.screenshot_path" target="_blank" class="text-cyan-400 underline">Ver Captura</a>
+                                            </template>
+                                            <template x-if="!t.screenshot_path">
+                                                <span class="text-slate-500">Ninguna</span>
+                                            </template>
+                                        </td>
+                                        <td class="py-2.5 px-3">
+                                            <span class="px-1.5 py-0.5 rounded text-[10px]" :class="t.is_approved ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'" x-text="t.is_approved ? 'Aprobado' : 'Pendiente'"></span>
+                                        </td>
+                                        <td class="py-2.5 px-3 space-x-1">
+                                            <template x-if="!t.is_approved">
+                                                <button @click="moderateTestimonial(t.id, true)" class="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded">Aprobar</button>
+                                            </template>
+                                            <button @click="moderateTestimonial(t.id, false)" class="px-2 py-1 bg-red-950/40 text-red-400 border border-red-500/20 rounded">Eliminar</button>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Section 3: Error Reports List -->
+                <div class="p-6 bg-slate-900/40 border border-slate-800 rounded-2xl">
+                    <h4 class="text-sm font-bold text-red-400 uppercase tracking-wider mb-3">Reportes de Errores e Incidencias</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b border-slate-800 text-slate-400">
+                                    <th class="py-2 px-3">Usuario</th>
+                                    <th class="py-2 px-3">URL</th>
+                                    <th class="py-2 px-3">Descripción</th>
+                                    <th class="py-2 px-3">Captura</th>
+                                    <th class="py-2 px-3">Fecha</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="r in adminErrorReports" :key="r.id">
+                                    <tr class="border-b border-slate-800/40 hover:bg-slate-800/20">
+                                        <td class="py-2.5 px-3" x-text="r.email"></td>
+                                        <td class="py-2.5 px-3" x-text="r.url || 'N/A'"></td>
+                                        <td class="py-2.5 px-3" x-text="r.description"></td>
+                                        <td class="py-2.5 px-3">
+                                            <template x-if="r.screenshot_path">
+                                                <a :href="r.screenshot_path" target="_blank" class="text-red-400 underline">Ver Captura Bug</a>
+                                            </template>
+                                            <template x-if="!r.screenshot_path">
+                                                <span class="text-slate-500">Ninguna</span>
+                                            </template>
+                                        </td>
+                                        <td class="py-2.5 px-3" x-text="r.created_at.split('T')[0]"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
 
     <!-- Settings Modal -->
     <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4" x-show="showSettings" style="display: none;">
@@ -924,15 +1586,20 @@
     <!-- Footer -->
     <footer class="w-full border-t border-slate-900 bg-slate-950/80 backdrop-blur-md py-6 text-center z-10 text-xs text-slate-500 mt-12">
         <div class="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div>
-                &copy; 2026 DealScout AI. All rights reserved. Enterprise Venture Intelligence.
-                <br/>
-                <span class="text-[10px] text-slate-600">This platform is built upon a MIT licensed clone of SURESHBEEKHANI/CrewAI-End-to-End with enterprise improvements.</span>
+            <div class="text-left space-y-1">
+                <div>&copy; 2026 DealScout AI. All rights reserved. Enterprise Venture Intelligence.</div>
+                <div class="text-[10px] text-slate-600">This platform is built upon a MIT licensed clone of SURESHBEEKHANI/CrewAI-End-to-End with enterprise improvements.</div>
             </div>
-            <div class="flex space-x-4">
-                <a href="#" class="hover:text-slate-300 transition-all">Privacy Policy</a>
-                <a href="#" class="hover:text-slate-300 transition-all">Terms of Use</a>
-                <a href="#" class="hover:text-slate-300 transition-all">Venture API</a>
+            <div class="flex items-center space-x-6">
+                <!-- Creator's Direct WhatsApp Link -->
+                <a href="https://wa.me/5351080807" target="_blank" class="flex items-center space-x-1.5 text-cyan-400 hover:text-cyan-300 font-bold transition-all">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.03 11.966.03c3.184.001 6.177 1.242 8.425 3.495 2.248 2.253 3.483 5.244 3.482 8.43-.003 6.611-5.34 11.929-11.91 11.929-2.001-.001-3.968-.503-5.716-1.458L0 24zm6.49-3.229c1.624.965 3.243 1.468 4.931 1.469 5.437 0 9.856-4.387 9.859-9.774a9.69 9.69 0 0 0-2.863-6.942 9.645 9.645 0 0 0-6.924-2.86c-5.441 0-9.859 4.388-9.862 9.776-.001 1.77.473 3.5 1.373 5.027l-.988 3.606 6.304-.902zm10.428-5.393c-.277-.139-1.64-.809-1.895-.901-.255-.093-.441-.139-.626.139-.184.278-.713.901-.873 1.086-.16.185-.32.208-.597.069-.277-.139-1.171-.432-2.231-1.378-.825-.733-1.382-1.639-1.544-1.917-.162-.277-.017-.427.122-.565.124-.124.277-.323.416-.485.139-.161.185-.278.277-.462.093-.185.046-.347-.023-.486-.069-.139-.626-1.503-.857-2.059-.225-.541-.453-.467-.626-.476-.162-.007-.347-.009-.532-.009-.185 0-.486.069-.74.347-.255.278-.972.809-.972 1.968 0 1.159.845 2.278.963 2.44 1.159 1.583 1.122 1.511 2.81 2.203.453.186.86.298 1.177.399.414.131.79.112 1.088.056.331-.061 1.64-.67 1.871-1.32.231-.648.231-1.204.162-1.32-.069-.115-.255-.185-.532-.324z"></path>
+                    </svg>
+                    <span>Escríbeme por WhatsApp</span>
+                </a>
+                <a href="#" class="hover:text-slate-300 transition-all">Políticas</a>
+                <a href="#" class="hover:text-slate-300 transition-all">Términos</a>
             </div>
         </div>
     </footer>

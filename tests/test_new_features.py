@@ -68,11 +68,20 @@ class TestNewFeatures(unittest.TestCase):
 
     def tearDown(self):
         # Clear database records added during test
+        from vcdiligence.database import Testimonial, ErrorReport
         self.db.query(Decision).filter_by(organization_id=1).delete()
         self.db.query(ReportChange).delete()
         self.db.query(PrecisionBenchmark).delete()
+        self.db.query(Testimonial).delete()
+        self.db.query(ErrorReport).delete()
+        self.db.query(User).filter(User.email.in_(["director@spacex.com", "partner@stripe.com"])).delete()
+        self.db.query(Organization).filter(Organization.company_name.in_(["SpaceX Inc", "Stripe Inc"])).delete()
+        self.db.query(Task).delete()
         if self.report:
-            self.db.delete(self.report)
+            try:
+                self.db.delete(self.report)
+            except Exception:
+                pass
         self.db.commit()
         self.db.close()
 
@@ -298,6 +307,77 @@ class TestNewFeatures(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["status"], "running")
         self.assertTrue(mock_add_task.called)
+
+    def test_opt_in_privacy_testimonials(self):
+        """Verify that feedback comment defaults to strict opt-in privacy, making nothing public without active consent."""
+        headers = {"Authorization": f"Bearer {self.analyst_token}"}
+
+        # Submit comment-only feedback with default opt-out values (all False)
+        resp = self.client.post("/testimonials", data={
+            "comment": "Totally confidential feedback!",
+            "share_comment": "false",
+            "share_photo": "false",
+            "share_name": "false"
+        }, headers=headers)
+        self.assertEqual(resp.status_code, 200)
+
+        # Confirm nothing is public
+        pub_resp = self.client.get("/testimonials")
+        self.assertEqual(pub_resp.status_code, 200)
+        self.assertEqual(len(pub_resp.json()), 0)
+
+        # Submit with opt-in share comment but anonymous name/photo
+        resp2 = self.client.post("/testimonials", data={
+            "comment": "I want to share my thoughts anonymously!",
+            "share_comment": "true",
+            "share_photo": "false",
+            "share_name": "false"
+        }, headers=headers)
+        self.assertEqual(resp2.status_code, 200)
+
+        pub_resp2 = self.client.get("/testimonials")
+        self.assertEqual(len(pub_resp2.json()), 1)
+        self.assertEqual(pub_resp2.json()[0]["user_name"], "Anonymous User")
+        self.assertIsNone(pub_resp2.json()[0]["profile_photo_path"])
+
+    @mock.patch.dict(os.environ, {"MIN_USERS_TO_SHOW_STATS": "15"})
+    def test_stats_threshold(self):
+        """Verify statistics hide when total registered users are below MIN_USERS_TO_SHOW_STATS."""
+        # Total registered users in setUp is 3 (seeded admin, test analyst, test admin)
+        resp = self.client.get("/stats")
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.json()["show_stats"])
+        self.assertIn("hidden", resp.json()["message"])
+
+        # Change threshold dynamically using mock to 2
+        with mock.patch.dict(os.environ, {"MIN_USERS_TO_SHOW_STATS": "2"}):
+            resp_show = self.client.get("/stats")
+            self.assertEqual(resp_show.status_code, 200)
+            self.assertTrue(resp_show.json()["show_stats"])
+            self.assertTrue(resp_show.json()["total_users"] >= 2)
+
+    def test_automated_domain_verification(self):
+        """Verify register endpoint and profile update trigger automated domain matching for company accounts."""
+        # Register a company account with matching email/website domain
+        resp_reg = self.client.post("/register", json={
+            "email": "director@spacex.com",
+            "password": "spacexpassword",
+            "account_type": "empresa",
+            "company_name": "SpaceX Inc",
+            "company_website": "https://spacex.com"
+        })
+        self.assertEqual(resp_reg.status_code, 200)
+        self.assertTrue(resp_reg.json()["user"]["verified_domain"])
+
+        token = resp_reg.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Update company website to a non-matching domain -> verify_domain becomes False
+        resp_update = self.client.post("/profile/update", data={
+            "company_website": "https://blueorigin.com"
+        }, headers=headers)
+        self.assertEqual(resp_update.status_code, 200)
+        self.assertFalse(resp_update.json()["verified_domain"])
 
 
 if __name__ == "__main__":

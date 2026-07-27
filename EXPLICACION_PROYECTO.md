@@ -102,6 +102,18 @@ Para enriquecer la experiencia de usuario y agilizar la diligencia debida, se ha
 ## 7. Notificaciones de Finalización por Correo
 Cuando finaliza un análisis en segundo plano, DealScout AI envía automáticamente una notificación de correo por SMTP al usuario (`send_report_ready_email`) detallando el nombre de la startup analizada, el score final de inversión y un enlace directo con token JWT de query parameter para descargar el reporte PDF sin requerir logins manuales recurrentes.
 
+## 8. Landing Pública, Validación y Funciones de Confianza (Nuevas Características)
+Hemos introducido una suite completa de validación, prueba social y canales directos para dinamizar la fase inicial de lanzamiento:
+1. **Banner de Fase de Validación:** Un aviso visible pero no invasivo en la landing page pública indica que el sistema se encuentra en fase de validación/producción temprana, mostrando transparencia y atrayendo adoptantes iniciales.
+2. **Contadores Públicos Condicionales:** Se despliega un bloque de estadísticas agregadas (total de usuarios, split de cuentas personal vs. empresa y cantidad de compañías analizadas). Estas estadísticas solo se visualizan si superan un umbral mínimo configurable (`MIN_USERS_TO_SHOW_STATS`, default 20), evitando verse vacías en los primeros días.
+3. **Sistema de Testimonios Estrictamente Opt-In:** Formulario de feedback donde el usuario decide activamente qué información compartir públicamente (su comentario, su foto de perfil, o su nombre/empresa). Ninguna casilla se auto-marca por defecto, protegiendo la privacidad. Los comentarios aprobados se rotan aleatoriamente en un carrusel público.
+4. **Moderación de Capturas y Fotos de Perfil:** Los testimonios con captura de pantalla (ej. reseñas de Twitter/LinkedIn) quedan en estado `pending_review` y requieren aprobación manual del administrador desde un panel de control antes de mostrarse en la landing.
+5. **Verificación de Empresas:** Las cuentas corporativas comparan automáticamente el dominio del correo de registro con el sitio web confirmado (ej. `juan@acme.com` vs `acme.com`), asignándoles la insignia `verified_domain = true`. El administrador puede verificar manualmente una cuenta VIP (`verified_by_admin = true`).
+6. **Entrega de Reporte por WhatsApp:** Los usuarios con cuentas de empresa con verificación de administrador activa (`verified_by_admin = true`) pueden marcar la opción "Recibir este reporte también por WhatsApp". Esto notifica al administrador mediante correo SMTP para que se lo reenvíe manualmente.
+7. **Programa de Referidos por Usuario:** Cada cuenta dispone de un código de referidos único (`window.location.origin + '/?ref=CODE'`) para invitar a otros analistas y mapear la relación de referidos al momento del registro.
+8. **Reporte de Errores e Incidencias:** Un botón persistente "Reportar Problema" abre un formulario para detallar problemas técnicos, capturar la URL actual y opcionalmente adjuntar capturas, guardando el registro y notificando de inmediato a los administradores por SMTP.
+9. **Canal de Contacto Directo con el Creador:** Se añade un botón "Escríbeme por WhatsApp" en el pie de página de la landing pública enlazando a `https://wa.me/5351080807` para consultas generales.
+
 ---
 
 ## 8. Variables de Entorno y Configuración

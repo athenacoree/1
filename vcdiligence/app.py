@@ -77,11 +77,16 @@ def on_startup():
     finally:
         db.close()
 
+import uuid
+from vcdiligence.database import Testimonial, ErrorReport
+
 # Pydantic Schemas
 class AnalyzeRequest(BaseModel):
     url: Optional[str] = None
     notify_email: Optional[str] = None
     linkedin_url: Optional[str] = None
+    receive_whatsapp: Optional[bool] = False
+    whatsapp_number: Optional[str] = None
 
 class SearchCompanyRequest(BaseModel):
     company_name: str
@@ -89,6 +94,14 @@ class SearchCompanyRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    account_type: str # "personal" or "empresa"
+    company_name: Optional[str] = None
+    company_website: Optional[str] = None
+    referred_by_code: Optional[str] = None
 
 class MonitoringConfigRequest(BaseModel):
     enabled: bool
@@ -99,6 +112,82 @@ class DecisionRequest(BaseModel):
     notas: Optional[str] = None
 
 # ----------------- AUTHENTICATION ENDPOINTS -----------------
+
+@app.post("/register")
+def register(req: RegisterRequest, db: Session = Depends(get_db)):
+    # Check if user already exists
+    existing = db.query(User).filter_by(email=req.email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="User with this email already exists")
+
+    # Resolve referral if code is provided
+    referred_by_id = None
+    if req.referred_by_code:
+        referrer = db.query(User).filter_by(referral_code=req.referred_by_code).first()
+        if referrer:
+            referred_by_id = referrer.id
+
+    # Create Organization or map to default
+    org_id = 1 # default is DealScout Capital
+    if req.account_type == "empresa" and req.company_name:
+        # Create a new organization for white-labeling
+        new_org = Organization(company_name=req.company_name)
+        db.add(new_org)
+        db.commit()
+        db.refresh(new_org)
+        org_id = new_org.id
+
+    # Generate unique referral code
+    unique_ref = str(uuid.uuid4())[:8].upper()
+    while db.query(User).filter_by(referral_code=unique_ref).first():
+        unique_ref = str(uuid.uuid4())[:8].upper()
+
+    user = User(
+        email=req.email,
+        hashed_password=hash_password(req.password),
+        role="analista",
+        organization_id=org_id,
+        account_type=req.account_type,
+        company_name=req.company_name,
+        company_website=req.company_website,
+        referral_code=unique_ref,
+        referred_by_id=referred_by_id
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    # Perform automatic domain verification if company website is provided and it's a company account
+    if req.account_type == "empresa" and req.email and req.company_website:
+        try:
+            # Simple domain extraction from email
+            email_domain = req.email.split("@")[-1].lower()
+            # Simple domain extraction from website
+            web_clean = req.company_website.lower().replace("http://", "").replace("https://", "").replace("www.", "")
+            web_domain = web_clean.split("/")[0]
+
+            if email_domain == web_domain and email_domain not in ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com"]:
+                user.verified_domain = True
+                db.commit()
+        except Exception as e:
+            logger.error(f"Error checking register domain match: {str(e)}")
+
+    token = create_access_token(data={"sub": user.email})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "email": user.email,
+            "role": user.role,
+            "organization_id": user.organization_id,
+            "account_type": user.account_type,
+            "company_name": user.company_name,
+            "company_website": user.company_website,
+            "verified_domain": user.verified_domain,
+            "verified_by_admin": user.verified_by_admin,
+            "referral_code": user.referral_code
+        }
+    }
 
 @app.post("/login")
 def login(req: LoginRequest, db: Session = Depends(get_db)):
@@ -116,7 +205,13 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         "user": {
             "email": user.email,
             "role": user.role,
-            "organization_id": user.organization_id
+            "organization_id": user.organization_id,
+            "account_type": user.account_type,
+            "company_name": user.company_name,
+            "company_website": user.company_website,
+            "verified_domain": user.verified_domain,
+            "verified_by_admin": user.verified_by_admin,
+            "referral_code": user.referral_code
         }
     }
 
@@ -127,6 +222,14 @@ def get_me(current_user: User = Depends(get_current_user), db: Session = Depends
         "id": current_user.id,
         "email": current_user.email,
         "role": current_user.role,
+        "account_type": current_user.account_type,
+        "company_name": current_user.company_name,
+        "company_website": current_user.company_website,
+        "verified_domain": current_user.verified_domain,
+        "verified_by_admin": current_user.verified_by_admin,
+        "referral_code": current_user.referral_code,
+        "referred_by_id": current_user.referred_by_id,
+        "profile_photo_path": current_user.profile_photo_path,
         "organization": {
             "id": org.id,
             "company_name": org.company_name,
@@ -134,7 +237,300 @@ def get_me(current_user: User = Depends(get_current_user), db: Session = Depends
         } if org else None
     }
 
+# ----------------- TESTIMONIAL ENDPOINTS -----------------
+
+@app.post("/testimonials")
+def submit_testimonial(
+    comment: str = Form(...),
+    share_comment: bool = Form(False),
+    share_photo: bool = Form(False),
+    share_name: bool = Form(False),
+    screenshot: Optional[UploadFile] = File(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Form-data feedback submission.
+    Rule: Opt-in by default - fields are false unless explicitly selected.
+    If comment-only and share_comment is True -> auto-approved (is_approved=True) because text comments don't need manual moderation.
+    If screenshot is uploaded -> is_approved is set to False (pending admin review).
+    """
+    screenshot_path = None
+    if screenshot:
+        static_screenshots_dir = os.path.join("vcdiligence", "static", "testimonials")
+        os.makedirs(static_screenshots_dir, exist_ok=True)
+        filename = f"screenshot_{current_user.id}_{screenshot.filename}"
+        path_on_disk = os.path.join(static_screenshots_dir, filename)
+
+        try:
+            with open(path_on_disk, "wb") as f:
+                f.write(screenshot.file.read())
+            screenshot_path = f"/static/testimonials/{filename}"
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to save testimonial screenshot: {str(e)}")
+
+    # Text-only testimonial -> auto-approve if commented is shared
+    # Screenshot -> always requires approval (is_approved = False initially)
+    is_approved = False if screenshot else True
+
+    testimonial = Testimonial(
+        user_id=current_user.id,
+        comment=comment,
+        share_comment=share_comment,
+        share_photo=share_photo,
+        share_name=share_name,
+        screenshot_path=screenshot_path,
+        is_approved=is_approved
+    )
+    db.add(testimonial)
+    db.commit()
+    db.refresh(testimonial)
+
+    return {
+        "status": "success",
+        "testimonial_id": testimonial.id,
+        "is_approved": testimonial.is_approved
+    }
+
+@app.get("/testimonials")
+def get_testimonials(db: Session = Depends(get_db)):
+    """
+    Returns random rotation of approved, opted-in testimonials.
+    Does not expose private details unless opted-in.
+    """
+    import random
+    # Select all approved testimonials that at least share comment
+    testimonials = db.query(Testimonial).filter_by(is_approved=True, share_comment=True).all()
+
+    output = []
+    for t in testimonials:
+        item = {
+            "comment": t.comment,
+            "screenshot_path": t.screenshot_path
+        }
+        if t.share_name:
+            item["user_name"] = t.user.company_name or t.user.email.split("@")[0]
+        else:
+            item["user_name"] = "Anonymous User"
+
+        if t.share_photo:
+            item["profile_photo_path"] = t.user.profile_photo_path
+        else:
+            item["profile_photo_path"] = None
+
+        output.append(item)
+
+    # Return randomized list
+    random.shuffle(output)
+    return output
+
+@app.get("/admin/testimonials")
+def list_pending_testimonials(current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Lists all testimonials for moderation."""
+    testimonials = db.query(Testimonial).order_by(Testimonial.created_at.desc()).all()
+    return [
+        {
+            "id": t.id,
+            "email": t.user.email,
+            "comment": t.comment,
+            "share_comment": t.share_comment,
+            "share_photo": t.share_photo,
+            "share_name": t.share_name,
+            "screenshot_path": t.screenshot_path,
+            "is_approved": t.is_approved,
+            "created_at": t.created_at.isoformat()
+        } for t in testimonials
+    ]
+
+@app.post("/admin/testimonials/{id}/approve")
+def approve_testimonial(
+    id: int,
+    approve: bool = Form(...),
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Approves or rejects a testimonial."""
+    testimonial = db.query(Testimonial).filter_by(id=id).first()
+    if not testimonial:
+        raise HTTPException(status_code=404, detail="Testimonial not found")
+
+    if approve:
+        testimonial.is_approved = True
+    else:
+        db.delete(testimonial)
+
+    db.commit()
+    return {"status": "success", "message": "Testimonial updated successfully"}
+
+# ----------------- ERROR REPORTS ENDPOINTS -----------------
+
+@app.post("/error-reports")
+def submit_error_report(
+    description: str = Form(...),
+    url: Optional[str] = Form(None),
+    screenshot: Optional[UploadFile] = File(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Submits a user-reported bug or layout issue.
+    Saves details in `error_reports` table and notifies administrators by SMTP.
+    """
+    screenshot_path = None
+    if screenshot:
+        static_errors_dir = os.path.join("vcdiligence", "static", "errors")
+        os.makedirs(static_errors_dir, exist_ok=True)
+        filename = f"error_{current_user.id}_{screenshot.filename}"
+        path_on_disk = os.path.join(static_errors_dir, filename)
+
+        try:
+            with open(path_on_disk, "wb") as f:
+                f.write(screenshot.file.read())
+            screenshot_path = f"/static/errors/{filename}"
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to save error screenshot: {str(e)}")
+
+    err_report = ErrorReport(
+        user_id=current_user.id,
+        description=description,
+        url=url,
+        screenshot_path=screenshot_path
+    )
+    db.add(err_report)
+    db.commit()
+    db.refresh(err_report)
+
+    # SMTP Alert Notification
+    subject = f"⚠️ [DealScout AI Bug Report] Nuevo problema reportado por {current_user.email}"
+    body = (
+        f"Se ha recibido un nuevo reporte de error en DealScout AI:\n\n"
+        f"Usuario: {current_user.email}\n"
+        f"URL/Pantalla: {url or 'No provista'}\n"
+        f"Descripción:\n{description}\n\n"
+    )
+    if screenshot_path:
+        body += f"Captura adjunta (ruta relativa): {screenshot_path}\n"
+
+    try:
+        from vcdiligence.monitoring import send_smtp_alert
+        send_smtp_alert(subject, body)
+    except Exception as s_err:
+        logger.error(f"Failed to dispatch bug alert SMTP email: {str(s_err)}")
+
+    return {
+        "status": "success",
+        "error_report_id": err_report.id,
+        "message": "Error report submitted successfully and administrators have been notified."
+    }
+
+@app.get("/admin/error-reports")
+def list_error_reports(current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Exposes all submitted user bug reports to administrators."""
+    reports = db.query(ErrorReport).order_by(ErrorReport.created_at.desc()).all()
+    return [
+        {
+            "id": r.id,
+            "email": r.user.email if r.user else "Anonymous",
+            "description": r.description,
+            "url": r.url,
+            "screenshot_path": r.screenshot_path,
+            "created_at": r.created_at.isoformat()
+        } for r in reports
+    ]
+
+# ----------------- PUBLIC STATS ENDPOINT -----------------
+
+@app.get("/stats")
+def get_public_stats(db: Session = Depends(get_db)):
+    """
+    Public, read-only endpoint returning global platform statistics:
+    - total registered users
+    - accounts split (company vs personal)
+    - total companies analyzed
+    Enforces MIN_USERS_TO_SHOW_STATS (default 20) threshold before returning statistics.
+    """
+    total_users = db.query(User).count()
+    min_users = int(os.getenv("MIN_USERS_TO_SHOW_STATS", "20"))
+
+    if total_users < min_users:
+        return {
+            "show_stats": False,
+            "min_required": min_users,
+            "total_users": total_users,
+            "message": "Stats are currently hidden because the minimum user threshold is not met."
+        }
+
+    company_users = db.query(User).filter_by(account_type="empresa").count()
+    personal_users = db.query(User).filter_by(account_type="personal").count()
+    analyzed_companies = db.query(Report.domain).distinct().count()
+
+    return {
+        "show_stats": True,
+        "total_users": total_users,
+        "split": {
+            "empresa": company_users,
+            "personal": personal_users
+        },
+        "analyzed_companies": analyzed_companies
+    }
+
 # ----------------- SETTINGS & WHITE-LABEL ENDPOINTS -----------------
+
+@app.post("/profile/update")
+def update_profile(
+    company_name: Optional[str] = Form(None),
+    company_website: Optional[str] = Form(None),
+    photo: Optional[UploadFile] = File(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Updates user profile details (company name, company website, and profile photo).
+    Triggers automatic domain verification if the account type is 'empresa'.
+    """
+    if company_name:
+        current_user.company_name = company_name
+    if company_website:
+        current_user.company_website = company_website
+
+    if photo:
+        static_photos_dir = os.path.join("vcdiligence", "static", "profiles")
+        os.makedirs(static_photos_dir, exist_ok=True)
+        filename = f"user_{current_user.id}_{photo.filename}"
+        photo_path = os.path.join(static_photos_dir, filename)
+
+        try:
+            with open(photo_path, "wb") as f:
+                f.write(photo.file.read())
+            current_user.profile_photo_path = f"/static/profiles/{filename}"
+            logger.info(f"Profile photo uploaded for user {current_user.id}: {photo_path}")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to save profile photo: {str(e)}")
+
+    # Automatic domain verification
+    if current_user.account_type == "empresa" and current_user.email and current_user.company_website:
+        try:
+            email_domain = current_user.email.split("@")[-1].lower()
+            web_clean = current_user.company_website.lower().replace("http://", "").replace("https://", "").replace("www.", "")
+            web_domain = web_clean.split("/")[0]
+
+            if email_domain == web_domain and email_domain not in ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com"]:
+                current_user.verified_domain = True
+            else:
+                current_user.verified_domain = False
+        except Exception as e:
+            logger.error(f"Error checking profile update domain match: {str(e)}")
+
+    db.commit()
+    db.refresh(current_user)
+
+    return {
+        "status": "success",
+        "company_name": current_user.company_name,
+        "company_website": current_user.company_website,
+        "profile_photo_path": current_user.profile_photo_path,
+        "verified_domain": current_user.verified_domain
+    }
 
 @app.post("/settings")
 def update_settings(
@@ -295,6 +691,23 @@ def start_analysis(
         task.result_json = None
     db.commit()
 
+    # Validate WhatsApp request constraints: Only company accounts with verified_by_admin = True
+    if req.receive_whatsapp:
+        if current_user.account_type != "empresa" or not current_user.verified_by_admin:
+            raise HTTPException(
+                status_code=403,
+                detail="WhatsApp delivery is restricted to verified company accounts only (verified_by_admin = True)"
+            )
+        if not req.whatsapp_number:
+            raise HTTPException(
+                status_code=400,
+                detail="WhatsApp number must be provided if WhatsApp delivery is selected"
+            )
+        extra_ctx["whatsapp_delivery"] = {
+            "whatsapp_number": req.whatsapp_number,
+            "user_email": current_user.email
+        }
+
     # Trigger background task natively using FastAPI's BackgroundTasks
     background_tasks.add_task(
         run_due_diligence_task,
@@ -383,9 +796,28 @@ def upload_and_analyze(
     pitch_deck: UploadFile = File(...),
     url: Optional[str] = Form(None),
     notify_email: Optional[str] = Form(None),
+    receive_whatsapp: Optional[bool] = Form(False),
+    whatsapp_number: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    extra_ctx = {}
+    if receive_whatsapp:
+        if current_user.account_type != "empresa" or not current_user.verified_by_admin:
+            raise HTTPException(
+                status_code=403,
+                detail="WhatsApp delivery is restricted to verified company accounts only (verified_by_admin = True)"
+            )
+        if not whatsapp_number:
+            raise HTTPException(
+                status_code=400,
+                detail="WhatsApp number must be provided if WhatsApp delivery is selected"
+            )
+        extra_ctx["whatsapp_delivery"] = {
+            "whatsapp_number": whatsapp_number,
+            "user_email": current_user.email
+        }
+
     # Save the file temporarily
     temp_dir = os.path.join("vcdiligence", "static", "uploads")
     os.makedirs(temp_dir, exist_ok=True)
@@ -507,6 +939,10 @@ def upload_and_analyze(
         task.result_json = None
     db.commit()
 
+    # Append pitch deck text to extra_ctx
+    if text:
+        extra_ctx["pitch_deck_text"] = text
+
     # Trigger background tasks
     background_tasks.add_task(
         run_due_diligence_task,
@@ -515,7 +951,7 @@ def upload_and_analyze(
         org_id=current_user.organization_id,
         user_id=current_user.id,
         user_email=current_user.email,
-        extra_context={"pitch_deck_text": text} if text else None,
+        extra_context=extra_ctx if extra_ctx else None,
         notify_email=notify_email
     )
 
@@ -839,6 +1275,48 @@ def list_benchmarks(current_user: User = Depends(require_admin), db: Session = D
             "matched": b.matched,
             "created_at": b.created_at.isoformat()
         } for b in benchmarks
+    ]
+
+# ----------------- ADMIN DIRECT USER VERIFICATION ENDPOINT -----------------
+
+@app.post("/admin/users/{id}/verify-by-admin")
+def toggle_admin_verification(
+    id: int,
+    verified: bool = Form(...),
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Allows an administrator to manually mark a company account as verified_by_admin."""
+    user = db.query(User).filter_by(id=id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.verified_by_admin = verified
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "status": "success",
+        "user_id": user.id,
+        "verified_by_admin": user.verified_by_admin
+    }
+
+@app.get("/admin/users")
+def list_users_for_admin(current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Allows an admin to view all registered users to manage manual verification."""
+    users = db.query(User).all()
+    return [
+        {
+            "id": u.id,
+            "email": u.email,
+            "account_type": u.account_type,
+            "company_name": u.company_name,
+            "company_website": u.company_website,
+            "verified_domain": u.verified_domain,
+            "verified_by_admin": u.verified_by_admin,
+            "referral_code": u.referral_code,
+            "created_at": u.created_at.isoformat()
+        } for u in users
     ]
 
 # ----------------- DEMO BACKWARD COMPATIBLE & UTILS -----------------

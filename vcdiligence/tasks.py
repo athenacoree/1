@@ -262,12 +262,13 @@ def run_due_diligence_task(
 
         # Send SMTP notification
         email_to = notify_email or user_email
+        token = create_access_token(data={"sub": user_email})
+        port = os.getenv("PORT", "10000")
+        base_url = f"http://localhost:{port}"
+        pdf_url = f"{base_url}/reports/{domain}/pdf?token={token}"
+
         if email_to:
             try:
-                token = create_access_token(data={"sub": user_email})
-                port = os.getenv("PORT", "10000")
-                base_url = f"http://localhost:{port}"
-                pdf_url = f"{base_url}/reports/{domain}/pdf?token={token}"
                 send_report_ready_email(
                     to_email=email_to,
                     company_name=company_name,
@@ -276,6 +277,30 @@ def run_due_diligence_task(
                 )
             except Exception as mail_err:
                 logger.error(f"Failed to send task ready email: {str(mail_err)}")
+
+        # Check if WhatsApp delivery requested and notify the administrator
+        if extra_context and "whatsapp_delivery" in extra_context:
+            try:
+                wa_details = extra_context["whatsapp_delivery"]
+                wa_num = wa_details.get("whatsapp_number")
+                user_mail = wa_details.get("user_email")
+
+                wa_subject = f"📱 [WhatsApp Delivery Needed] Reporte de {company_name} listo"
+                wa_body = (
+                    f"Atención Administrador:\n\n"
+                    f"El usuario {user_mail} ha solicitado recibir su reporte de due diligence por WhatsApp.\n\n"
+                    f"Detalles de la entrega:\n"
+                    f"- Empresa: {company_name}\n"
+                    f"- Score: {score}/100\n"
+                    f"- Número WhatsApp: {wa_num}\n"
+                    f"- Enlace de descarga del Reporte PDF: {pdf_url}\n\n"
+                    f"Por favor, reenvíe manualmente el archivo o el enlace al cliente."
+                )
+                from vcdiligence.monitoring import send_smtp_alert
+                send_smtp_alert(wa_subject, wa_body)
+                logger.info(f"Admin WhatsApp notice dispatched successfully for user {user_mail} and number {wa_num}")
+            except Exception as wa_err:
+                logger.error(f"Failed to dispatch WhatsApp manual delivery notice to admin: {str(wa_err)}")
 
     except Exception as e:
         logger.error(f"Error running due diligence background task: {str(e)}", exc_info=True)
