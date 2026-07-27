@@ -44,7 +44,44 @@ class User(Base):
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
+    # Added fields for validation, landing, and referral
+    account_type = Column(String, default="personal", nullable=False) # "personal" or "empresa"
+    company_name = Column(String, nullable=True)
+    company_website = Column(String, nullable=True)
+    verified_domain = Column(Boolean, default=False, nullable=False)
+    verified_by_admin = Column(Boolean, default=False, nullable=False)
+    profile_photo_path = Column(String, nullable=True)
+    referral_code = Column(String, unique=True, index=True, nullable=True)
+    referred_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
     organization = relationship("Organization", back_populates="users")
+
+class Testimonial(Base):
+    __tablename__ = "testimonials"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    comment = Column(Text, nullable=False)
+    share_comment = Column(Boolean, default=False, nullable=False)
+    share_photo = Column(Boolean, default=False, nullable=False)
+    share_name = Column(Boolean, default=False, nullable=False)
+    screenshot_path = Column(String, nullable=True)
+    is_approved = Column(Boolean, default=False, nullable=False) # screenshot needs manual approval, text comments auto-approve
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    user = relationship("User")
+
+class ErrorReport(Base):
+    __tablename__ = "error_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    description = Column(Text, nullable=False)
+    url = Column(String, nullable=True)
+    screenshot_path = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    user = relationship("User")
 
 class Report(Base):
     __tablename__ = "reports"
