@@ -72,3 +72,17 @@ business_analyst_task:
   expected_output: >
     A comprehensive, professional investment memo starting with 'INVESTMENT_SCORE: XX', 'RECOMMENDATION: YY', and 'SUB_SCORES: ZZ' followed by a deep-dive analysis of market, product, competition, team, financials, the 'Señales por Ausencia' section, risk matrix, sub-scores breakdown, and strategic next steps.
   agent: business_analyst
+
+devils_advocate_task:
+  description: >
+    Critically debate the consensus decision/recommendation made for {company_name} ({company_url}).
+    Review the generated investment score, sub-scores, recommendation, and deep-dive analysis from the prior tasks.
+
+    Determine if the recommendation is positive (GO or CONDITIONAL) or negative (NO-GO).
+    - If positive (GO or CONDITIONAL): Argue the best possible case AGAINST investing. Focus on critical risks, industry headwinds, missing metrics, team red flags, or potential competitive threats.
+    - If negative (NO-GO): Argue the best possible case IN FAVOR of investing. Focus on asymmetric upside, underestimated moats, niche market positioning, or positive signals from public API records.
+
+    You must NOT alter the original score or recommendation. Your analysis must be formatted under a new section titled "Caso a Favor vs. Caso en Contra" (Case For vs. Case Against) or "Análisis Contradictorio" (Contradictory Analysis).
+  expected_output: >
+    A section titled "Caso a Favor vs. Caso en Contra" containing a highly detailed, professional, and convincing debate/contra-argument contesting the consensus recommendation without changing the final score/recommendation.
+  agent: devils_advocate

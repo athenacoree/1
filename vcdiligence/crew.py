@@ -7,7 +7,7 @@ from vcdiligence.llm_manager import LLMProviderManager
 
 @CrewBase
 class MarketResearchCrew():
-    def __init__(self):
+    def __init__(self, task_callback=None):
         base_path = os.path.dirname(__file__)
         agents_yaml_path = os.path.join(base_path, "config", "agents.yaml")
         tasks_yaml_path = os.path.join(base_path, "config", "tasks.yaml")
@@ -18,6 +18,7 @@ class MarketResearchCrew():
             self.tasks_config = yaml.safe_load(f)
 
         self.llm, self.provider_name = LLMProviderManager.get_llm()
+        self.task_callback = task_callback
 
     @agent
     def market_research_specialist(self) -> Agent:
@@ -67,6 +68,14 @@ class MarketResearchCrew():
             verbose=True
         )
 
+    @agent
+    def devils_advocate(self) -> Agent:
+        return Agent(
+            config=self.agents_config["devils_advocate"],
+            llm=self.llm,
+            verbose=True
+        )
+
     @task
     def market_research_task(self) -> Task:
         return Task(
@@ -100,7 +109,14 @@ class MarketResearchCrew():
     @task
     def business_analyst_task(self) -> Task:
         return Task(
-            config=self.tasks_config["business_analyst_task"]
+            config=self.tasks_config["business_analyst_task"],
+            callback=self.task_callback
+        )
+
+    @task
+    def devils_advocate_task(self) -> Task:
+        return Task(
+            config=self.tasks_config["devils_advocate_task"]
         )
 
     @crew
@@ -112,7 +128,8 @@ class MarketResearchCrew():
                 self.customer_insights_researcher(),
                 self.product_strategy_advisor(),
                 self.omission_analyst(),
-                self.business_analyst()
+                self.business_analyst(),
+                self.devils_advocate()
             ],
             tasks=[
                 self.market_research_task(),
@@ -120,7 +137,8 @@ class MarketResearchCrew():
                 self.customer_insights_task(),
                 self.product_strategy_task(),
                 self.omission_analyst_task(),
-                self.business_analyst_task()
+                self.business_analyst_task(),
+                self.devils_advocate_task()
             ],
             process=Process.sequential,
             verbose=True

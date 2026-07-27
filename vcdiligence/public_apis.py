@@ -34,14 +34,15 @@ def set_cached_response(api_name: str, query: str, data: dict):
     except Exception as e:
         logger.error(f"Failed to write cache for {api_name}: {str(e)}")
 
-def search_sec_edgar(company_name: str) -> dict:
+def search_sec_edgar(company_name: str, force_refresh: bool = False) -> dict:
     """
     Queries api.sec.gov for submissions or filings.
     Requires proper User-Agent string as per SEC guidelines.
     """
-    cached = get_cached_response("sec_edgar", company_name)
-    if cached:
-        return cached
+    if not force_refresh:
+        cached = get_cached_response("sec_edgar", company_name)
+        if cached:
+            return cached
 
     # SEC EDGAR requires a specific User-Agent format: Organization ContactEmail
     headers = {
@@ -99,11 +100,12 @@ def search_sec_edgar(company_name: str) -> dict:
         logger.error(f"SEC Edgar query error for {company_name}: {str(e)}")
         return {"status": "error", "message": f"Connection/Parsing error: {str(e)}"}
 
-def search_opencorporates(company_name: str) -> dict:
+def search_opencorporates(company_name: str, force_refresh: bool = False) -> dict:
     """Queries OpenCorporates for company registration details."""
-    cached = get_cached_response("opencorporates", company_name)
-    if cached:
-        return cached
+    if not force_refresh:
+        cached = get_cached_response("opencorporates", company_name)
+        if cached:
+            return cached
 
     # Optional API key from environment
     api_key = os.getenv("OPENCORPORATES_API_KEY")
@@ -138,11 +140,12 @@ def search_opencorporates(company_name: str) -> dict:
         logger.error(f"OpenCorporates search error: {str(e)}")
         return {"status": "error", "message": f"Connection/Parsing error: {str(e)}"}
 
-def search_uspto(company_name: str) -> dict:
+def search_uspto(company_name: str, force_refresh: bool = False) -> dict:
     """Queries USPTO for trademark or patent availability/registration indicators."""
-    cached = get_cached_response("uspto", company_name)
-    if cached:
-        return cached
+    if not force_refresh:
+        cached = get_cached_response("uspto", company_name)
+        if cached:
+            return cached
 
     # USPTO Open Data Portal Patent Application API
     url = "https://developer.uspto.gov/ibd-api/v1/patent/application"
@@ -175,14 +178,15 @@ def search_uspto(company_name: str) -> dict:
         logger.error(f"USPTO search error: {str(e)}")
         return {"status": "error", "message": f"Connection/Parsing error: {str(e)}"}
 
-def search_courtlistener(company_name: str) -> dict:
+def search_courtlistener(company_name: str, force_refresh: bool = False) -> dict:
     """
     Queries CourtListener (RECAP) API for federal litigations associated with the company name.
     Does NOT draw legal conclusions or decide guilt. Reports matches as findings needing human review.
     """
-    cached = get_cached_response("courtlistener", company_name)
-    if cached:
-        return cached
+    if not force_refresh:
+        cached = get_cached_response("courtlistener", company_name)
+        if cached:
+            return cached
 
     url = "https://www.courtlistener.com/api/rest/v3/search/"
     params = {"q": company_name, "type": "r"} # 'r' stands for RECAP documents / filings
@@ -216,13 +220,14 @@ def search_courtlistener(company_name: str) -> dict:
         logger.error(f"CourtListener search error: {str(e)}")
         return {"status": "error", "message": f"Connection/Parsing error: {str(e)}"}
 
-def query_github_repo(company_name: str) -> dict:
+def query_github_repo(company_name: str, force_refresh: bool = False) -> dict:
     """
     Queries GitHub API to seek repos or organization details.
     """
-    cached = get_cached_response("github", company_name)
-    if cached:
-        return cached
+    if not force_refresh:
+        cached = get_cached_response("github", company_name)
+        if cached:
+            return cached
 
     url = f"https://api.github.com/search/repositories"
     params = {"q": company_name, "sort": "stars", "order": "desc"}
@@ -262,12 +267,12 @@ def query_github_repo(company_name: str) -> dict:
         logger.error(f"GitHub search error: {str(e)}")
         return {"status": "error", "message": f"Connection/Parsing error: {str(e)}"}
 
-def get_all_public_insights(company_name: str) -> dict:
+def get_all_public_insights(company_name: str, force_refresh: bool = False) -> dict:
     """Aggregates all public API search insights for the given company."""
     return {
-        "sec_edgar": search_sec_edgar(company_name),
-        "opencorporates": search_opencorporates(company_name),
-        "uspto": search_uspto(company_name),
-        "courtlistener": search_courtlistener(company_name),
-        "github": query_github_repo(company_name)
+        "sec_edgar": search_sec_edgar(company_name, force_refresh=force_refresh),
+        "opencorporates": search_opencorporates(company_name, force_refresh=force_refresh),
+        "uspto": search_uspto(company_name, force_refresh=force_refresh),
+        "courtlistener": search_courtlistener(company_name, force_refresh=force_refresh),
+        "github": query_github_repo(company_name, force_refresh=force_refresh)
     }

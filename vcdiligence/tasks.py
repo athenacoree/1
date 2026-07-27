@@ -4,7 +4,7 @@ from vcdiligence.celery_app import celery_app
 from vcdiligence.database import SessionLocal, Organization, Report, Task
 from vcdiligence.logging_config import logger
 from vcdiligence.scraper import SmartScraper
-from vcdiligence.parser import parse_report_meta
+from vcdiligence.parser import parse_report_meta, merge_devils_advocate
 from vcdiligence.public_apis import get_all_public_insights
 from vcdiligence.pdf_generator import generate_report_pdf
 from vcdiligence.crew import MarketResearchCrew
@@ -128,7 +128,21 @@ def run_due_diligence_task(domain: str, url: str, org_id: int, user_id: int, use
             task.message = "Coordinating CrewAI multi-agent market, product & omission analysis..."
             db.commit()
 
-        crew_obj = MarketResearchCrew()
+        def task_callback(task_output):
+            db_cb = SessionLocal()
+            try:
+                t = db_cb.query(Task).filter_by(id=f"{org_id}_{domain}").first()
+                if t:
+                    t.status = "debating"
+                    t.progress = 75
+                    t.message = "Cuestionando la recomendación: buscando el mejor contraargumento..."
+                    db_cb.commit()
+            except Exception as e:
+                logger.error(f"Error in task status callback: {str(e)}")
+            finally:
+                db_cb.close()
+
+        crew_obj = MarketResearchCrew(task_callback=task_callback)
         inputs = {
             "company_name": payload.get("company_name", company_name),
             "company_url": payload.get("company_url", url),
@@ -143,7 +157,19 @@ def run_due_diligence_task(domain: str, url: str, org_id: int, user_id: int, use
 
         # Run CrewAI kickoff
         result_output = crew_obj.crew().kickoff(inputs=inputs)
-        markdown_report = getattr(result_output, "raw", str(result_output))
+
+        # Merge business analyst memo and devils advocate section
+        try:
+            tasks_out = getattr(result_output, "tasks_output", [])
+            if len(tasks_out) >= 7:
+                business_analyst_report = tasks_out[5].raw
+                devils_advocate_section = tasks_out[6].raw
+                markdown_report = merge_devils_advocate(business_analyst_report, devils_advocate_section)
+            else:
+                markdown_report = getattr(result_output, "raw", str(result_output))
+        except Exception as e:
+            logger.error(f"Error merging Devil's Advocate section: {str(e)}")
+            markdown_report = getattr(result_output, "raw", str(result_output))
 
         # Parse metadata
         parsed_score, parsed_recommendation, sub_scores = parse_report_meta(markdown_report)
