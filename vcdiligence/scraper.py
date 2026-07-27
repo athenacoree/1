@@ -5,7 +5,6 @@ import requests
 from urllib.parse import urlparse, urljoin
 from bs4 import BeautifulSoup
 from duckduckgo_search import DDGS
-from playwright.sync_api import sync_playwright
 from vcdiligence.logging_config import logger
 
 class SmartScraper:
@@ -50,6 +49,7 @@ class SmartScraper:
     def scrape_with_playwright(cls, url):
         logger.info(f"Using Playwright headless fallback for {url}")
         try:
+            from playwright.sync_api import sync_playwright
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
                 # Create a context with custom User-Agent
@@ -95,7 +95,9 @@ class SmartScraper:
             response = requests.get(base_url, headers=headers, timeout=10)
             html = response.text if response.status_code == 200 else ""
             if not html or len(html) < 2000:
+                logger.info(f"Using Playwright headless fallback to find internal links for {base_url}")
                 try:
+                    from playwright.sync_api import sync_playwright
                     with sync_playwright() as p:
                         browser = p.chromium.launch(headless=True)
                         page = browser.new_page()
@@ -201,3 +203,97 @@ class SmartScraper:
             pass
 
         return analysis_payload
+
+    @classmethod
+    def scrape_linkedin(cls, linkedin_url):
+        logger.info(f"Extracting LinkedIn context from URL: {linkedin_url}")
+        results = cls.search_duckduckgo(linkedin_url, count=2)
+        snippet_text = ""
+        for r in results:
+            snippet_text += f"\nTitle: {r.get('title', '')}\nSnippet: {r.get('snippet', '')}\n"
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+            res = requests.get(linkedin_url, headers=headers, timeout=8)
+            if res.status_code == 200:
+                soup = BeautifulSoup(res.text, "html.parser")
+                og_title = soup.find("meta", property="og:title")
+                og_desc = soup.find("meta", property="og:description")
+                meta_desc = soup.find("meta", {"name": "description"})
+                title_val = og_title["content"] if og_title else ""
+                desc_val = og_desc["content"] if og_desc else (meta_desc["content"] if meta_desc else "")
+                if title_val or desc_val:
+                    snippet_text += f"\nLinkedIn OG Title: {title_val}\nLinkedIn OG Description: {desc_val}\n"
+        except Exception as e:
+            logger.warning(f"Direct LinkedIn requests scraping failed or blocked: {str(e)}")
+
+        inferred_url = None
+        urls = re.findall(r'https?://(?:www\.)?([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+)', snippet_text)
+        for u in urls:
+            if not any(ignored in u.lower() for ignored in ["linkedin.com", "google.com", "twitter.com", "facebook.com", "crunchbase.com", "wikipedia.org"]):
+                inferred_url = f"https://{u}"
+                break
+
+        company_name = None
+        match = re.search(r'/company/([a-zA-Z0-9-]+)', linkedin_url)
+        if match:
+            company_name = match.group(1).replace("-", " ")
+        else:
+            match_in = re.search(r'/in/([a-zA-Z0-9-]+)', linkedin_url)
+            if match_in:
+                company_name = match_in.group(1).replace("-", " ")
+
+        if company_name and not inferred_url:
+            search_res = cls.search_duckduckgo(f"{company_name} official website", count=1)
+            if search_res and search_res[0].get("link"):
+                inferred_url = search_res[0].get("link")
+
+        return {
+            "linkedin_data": snippet_text.strip() or f"[No public LinkedIn snippets found for URL: {linkedin_url}]",
+            "inferred_url": inferred_url,
+            "company_name": company_name
+        }
+
+    @classmethod
+    def extract_text_from_pdf(cls, file_path):
+        try:
+            import pypdf
+            reader = pypdf.PdfReader(file_path)
+            text = ""
+            for page in reader.pages:
+                t = page.extract_text()
+                if t:
+                    text += t + "\n"
+            return text
+        except Exception as e:
+            logger.error(f"Error reading PDF: {str(e)}")
+            return ""
+
+    @classmethod
+    def extract_text_from_pptx(cls, file_path):
+        try:
+            from pptx import Presentation
+            prs = Presentation(file_path)
+            text = ""
+            for slide in prs.slides:
+                for shape in slide.shapes:
+                    if hasattr(shape, "text") and shape.text:
+                        text += shape.text + "\n"
+            return text
+        except Exception as e:
+            logger.error(f"Error reading PPTX: {str(e)}")
+            return ""
+
+    @classmethod
+    def extract_url_from_text(cls, text):
+        urls = re.findall(r'(https?://[^\s()<>]+(?:\.[^\s()<>]+)+)', text)
+        if not urls:
+            urls = re.findall(r'\b(?:[a-zA-Z0-9-]+\.)+(?:com|io|co|net|org|ai|edu|gov|mx|lat|app)\b', text)
+        for u in urls:
+            u_lower = u.lower()
+            if not any(generic in u_lower for generic in ["schema.org", "w3.org", "adobe.com", "microsoft.com", "pypdf", "openxmlformats"]):
+                if not u_lower.startswith("http"):
+                    u = f"https://{u}"
+                return u
+        return None

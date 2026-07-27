@@ -6,9 +6,8 @@ from unittest import mock
 from fastapi.testclient import TestClient
 
 from vcdiligence.app import app
-from vcdiligence.database import SessionLocal, init_db, Organization, User, Report, ReportChange, Decision, PrecisionBenchmark
+from vcdiligence.database import SessionLocal, init_db, Organization, User, Report, ReportChange, Decision, PrecisionBenchmark, Task
 from vcdiligence.security import hash_password, create_access_token
-from vcdiligence.celery_app import celery_app
 
 class TestNewFeatures(unittest.TestCase):
     def setUp(self):
@@ -77,10 +76,25 @@ class TestNewFeatures(unittest.TestCase):
         self.db.commit()
         self.db.close()
 
-    def test_celery_configuration(self):
-        """Verify Celery registers tasks and defaults to task_always_eager when no REDIS_URL exists."""
-        self.assertTrue(celery_app.conf.task_always_eager)
-        self.assertIn("vcdiligence.tasks.run_due_diligence_task", celery_app.tasks)
+    @mock.patch("vcdiligence.app.BackgroundTasks.add_task")
+    def test_background_tasks_flow(self, mock_add_task):
+        """Verify that /analyze endpoint triggers FastAPI BackgroundTasks instead of Celery."""
+        headers = {"Authorization": f"Bearer {self.analyst_token}"}
+        resp = self.client.post("/analyze", json={
+            "url": "https://newstartup.com",
+            "notify_email": "test@notify.com"
+        }, headers=headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["status"], "running")
+        self.assertTrue(mock_add_task.called)
+
+        # Verify that task was created in DB with starting status
+        task = self.db.query(Task).filter_by(id="1_newstartup.com").first()
+        self.assertIsNotNone(task)
+        self.assertEqual(task.status, "starting")
+        self.assertEqual(task.progress, 5)
+        self.db.delete(task)
+        self.db.commit()
 
     def test_monitoring_endpoints(self):
         """Verify we can configure monitoring settings and get monitoring history."""
@@ -232,6 +246,58 @@ class TestNewFeatures(unittest.TestCase):
         tasks = crew_obj.crew().tasks
         business_task = [t for t in tasks if t.callback == dummy_callback][0]
         self.assertEqual(business_task.callback, dummy_callback)
+
+    @mock.patch("vcdiligence.scraper.SmartScraper.search_duckduckgo")
+    def test_search_company_endpoint(self, mock_ddg):
+        """Verify that /search-company returns search candidates successfully."""
+        headers = {"Authorization": f"Bearer {self.analyst_token}"}
+        mock_ddg.return_value = [
+            {"title": "Stripe | Official Site", "link": "https://stripe.com", "body": "Payments infrastructure"}
+        ]
+        resp = self.client.post("/search-company", json={"company_name": "Stripe"}, headers=headers)
+        self.assertEqual(resp.status_code, 200)
+        options = resp.json()["options"]
+        self.assertTrue(len(options) >= 1)
+        self.assertEqual(options[0]["domain"], "stripe.com")
+
+    @mock.patch("vcdiligence.app.BackgroundTasks.add_task")
+    @mock.patch("vcdiligence.scraper.SmartScraper.extract_text_from_pdf")
+    def test_analyze_upload_pdf(self, mock_extract, mock_add_task):
+        """Verify that uploading a pitch deck PDF triggers background tasks and extracts URLs."""
+        headers = {"Authorization": f"Bearer {self.analyst_token}"}
+        mock_extract.return_value = "Check out our website at airbnb.com or contacts us."
+
+        # Create a dummy PDF bytes content
+        import io
+        pdf_file = io.BytesIO(b"%PDF-1.4 dummy content")
+
+        resp = self.client.post(
+            "/analyze/upload",
+            headers=headers,
+            files={"pitch_deck": ("deck.pdf", pdf_file, "application/pdf")},
+            data={"notify_email": "pitch@test.com"}
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["status"], "running")
+        self.assertTrue(mock_add_task.called)
+
+    @mock.patch("vcdiligence.app.BackgroundTasks.add_task")
+    @mock.patch("vcdiligence.scraper.SmartScraper.scrape_linkedin")
+    def test_analyze_linkedin_only(self, mock_linkedin, mock_add_task):
+        """Verify that starting analysis with only a LinkedIn URL infers website and runs task."""
+        headers = {"Authorization": f"Bearer {self.analyst_token}"}
+        mock_linkedin.return_value = {
+            "linkedin_data": "Stripe is a payments company founded in...",
+            "inferred_url": "https://stripe.com",
+            "company_name": "stripe"
+        }
+        resp = self.client.post("/analyze", json={
+            "linkedin_url": "https://www.linkedin.com/company/stripe",
+            "notify_email": "linkedin@test.com"
+        }, headers=headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["status"], "running")
+        self.assertTrue(mock_add_task.called)
 
 
 if __name__ == "__main__":
