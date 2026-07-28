@@ -288,10 +288,53 @@ def run_continuous_monitoring_job():
             r.last_monitored_at = datetime.datetime.utcnow()
             db.commit()
 
+        # Check and warn listings about expiry
+        check_listings_expiry(db)
+
     except Exception as e:
         logger.error(f"Error running continuous monitoring job: {str(e)}", exc_info=True)
     finally:
         db.close()
+
+
+def check_listings_expiry(db):
+    """
+    Checks active listings that are within 5 days of expiring and sends them a notification.
+    """
+    import os
+    from vcdiligence.database import CompanyListing
+    from vcdiligence.logging_config import logger
+
+    now = datetime.datetime.utcnow()
+    warning_window = now + datetime.timedelta(days=5)
+
+    # Find active approved listings expiring in the next 5 days
+    expiring_listings = db.query(CompanyListing).filter(
+        CompanyListing.status == "approved",
+        CompanyListing.expires_at > now,
+        CompanyListing.expires_at <= warning_window
+    ).all()
+
+    for lst in expiring_listings:
+        founder_email = lst.user.email
+        subject = f"⚠️ [DealScout AI] Tu listado de '{lst.visible_name}' está por expirar"
+        renew_url = f"https://dealscout.ai/empresa/{lst.slug}"
+        body = (
+            f"Hola,\n\n"
+            f"Tu listado para la empresa '{lst.visible_name}' en el directorio de DealScout AI vencerá en menos de 5 días "
+            f"({lst.expires_at.strftime('%Y-%m-%d')}).\n\n"
+            f"Si deseas renovarlo por otros 60 días más, puedes hacerlo directamente ingresando a tu panel de control, "
+            f"o haciendo clic en tu página pública para renovar:\n"
+            f"{renew_url}\n\n"
+            f"Si prefieres retirarlo o no respondes, el listado se ocultará automáticamente al expirar.\n\n"
+            f"Atentamente,\n"
+            f"El equipo de DealScout AI"
+        )
+        try:
+            send_smtp_alert(subject, body)
+            logger.info(f"Expiry warning email sent to founder: {founder_email}")
+        except Exception as e:
+            logger.error(f"Failed to send expiry email to {founder_email}: {str(e)}")
 
 
 def send_report_ready_email(to_email: str, company_name: str, score: int, pdf_url: str):

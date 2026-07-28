@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ name }} — DealScout AI Directory</title>
+    <meta property="og:title" content="{{ name }} — Investor Readiness Score: {{ score }}" />
+    <meta property="og:description" content="{{ description }}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="/empresa/{{ slug }}" />
+    <meta property="og:image" content="/empresa/{{ slug }}/badge" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #030712;
+            background-image: radial-gradient(at 0% 0%, rgba(6, 182, 212, 0.15) 0, transparent 50%);
+        }
+    </style>
+</head>
+<body class="text-slate-100 min-h-screen flex flex-col justify-between font-sans">
+    <header class="w-full max-w-4xl mx-auto px-6 py-6 flex justify-between items-center">
+        <a href="/" class="flex items-center space-x-3">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-400 to-emerald-500 flex items-center justify-center">
+                <span class="text-slate-950 font-bold text-sm tracking-tighter">DS</span>
+            </div>
+            <span class="font-bold text-sm bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">DealScout AI</span>
+        </a>
+    </header>
+
+    <main class="flex-grow w-full max-w-4xl mx-auto px-6 py-12">
+        <div class="p-8 rounded-3xl bg-slate-900/60 border border-slate-800 backdrop-blur-md space-y-6">
+            <div class="flex justify-between items-start gap-4 flex-col sm:flex-row">
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <h1 class="text-3xl font-black text-white">{{ name }}</h1>
+                        {% if verified %}
+                        <span class='bg-cyan-500/15 text-cyan-400 text-[10px] uppercase font-bold px-2 py-0.5 rounded'>✔ Verificado</span>
+                        {% endif %}
+                    </div>
+                    <p class="text-sm text-slate-400 mt-1">{{ industry }} • {{ country }}</p>
+                </div>
+                <div class="p-4 rounded-2xl bg-slate-950 text-center border border-slate-800">
+                    <span class="text-[9px] text-slate-500 uppercase tracking-widest font-semibold block">Investor Readiness</span>
+                    <span class="text-2xl font-extrabold text-cyan-400">{{ score }}</span>
+                </div>
+            </div>
+
+            <div class="space-y-2">
+                <h3 class="text-xs uppercase font-bold text-slate-400 tracking-wider">Acerca de la empresa</h3>
+                <p class="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{{ description }}</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 pt-4 border-t border-slate-800/80">
+                <div>
+                    <span class="text-[10px] text-slate-500 uppercase font-bold block">Categoría</span>
+                    <span class="text-sm text-slate-200 capitalize">{% if category == "investment" %}Buscando inversión{% else %}Abierto a conversaciones de adquisición{% endif %}</span>
+                </div>
+                <div>
+                    <span class="text-[10px] text-slate-500 uppercase font-bold block">Vencimiento de Listado</span>
+                    <span class="text-sm text-slate-200">{{ expires_at }}</span>
+                </div>
+            </div>
+
+            <div class="pt-6 flex flex-col sm:flex-row gap-3">
+                <button onclick="expressInterest()" id="interest-btn" class="flex-grow py-3 bg-gradient-to-r from-cyan-500 to-emerald-500 text-slate-950 font-bold rounded-xl text-sm hover:opacity-90">
+                    Me interesa
+                </button>
+                <a href="/empresa/{{ slug }}/badge" download="{{ slug }}_badge.svg" class="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-cyan-400 font-bold rounded-xl text-sm text-center border border-cyan-400/20">
+                    Descargar Badge
+                </a>
+            </div>
+
+            <div id="interest-feedback" class="p-3 rounded-xl text-xs hidden"></div>
+        </div>
+    </main>
+
+    <footer class="w-full border-t border-slate-900 bg-slate-950/80 py-4 text-center text-[10px] text-slate-600">
+        Este directorio es solo un espacio de descubrimiento entre fundadores e inversionistas. La plataforma no gestiona fondos, no es intermediario financiero ni corredor de valores, y no participa en la negociación ni cierre de ningún trato.
+    </footer>
+
+    <script>
+        async function expressInterest() {
+            const token = localStorage.getItem('token');
+            const feedback = document.getElementById('interest-feedback');
+            const btn = document.getElementById('interest-btn');
+
+            if (!token) {
+                feedback.className = "p-3 rounded-xl text-xs bg-yellow-950/40 text-yellow-400 border border-yellow-900/50";
+                feedback.innerText = "Debes iniciar sesión como VC/inversionista para mostrar interés.";
+                feedback.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const res = await fetch('/listings/{{ listing_id }}/interest', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await res.json();
+                if (res.status === 200) {
+                    feedback.className = "p-3 rounded-xl text-xs bg-emerald-950/40 text-emerald-400 border border-emerald-900/50";
+                    feedback.innerText = "¡Interés registrado! El fundador ha sido notificado con tus datos de contacto.";
+                    btn.disabled = true;
+                    btn.opacity = "0.5";
+                } else {
+                    throw new Error(data.detail || "Error al registrar interés");
+                }
+                feedback.classList.remove('hidden');
+            } catch(err) {
+                feedback.className = "p-3 rounded-xl text-xs bg-red-950/40 text-red-400 border border-red-900/50";
+                feedback.innerText = err.message;
+                feedback.classList.remove('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
