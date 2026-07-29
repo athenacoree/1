@@ -116,7 +116,18 @@ Hemos introducido una suite completa de validación, prueba social y canales dir
 
 ---
 
-## 8. Variables de Entorno y Configuración
+## 9. Directorio de Dos Lados (Fundadores e Inversión)
+Hemos expandido DealScout AI para convertirse en un directorio de dos lados que conecta fundadores que buscan capital o están abiertos a adquisición con inversionistas/VCs de todo el mundo:
+1. **Perfil de Fundador y Autoanálisis:** Los fundadores pueden realizar autoanálisis de sus propias empresas utilizando los flujos asíncronos de análisis existentes y ver un reporte detallado con una explicación sencilla y amigable adaptada para fundadores (no técnica de VC).
+2. **Opt-In Explícito para Publicación:** Una empresa analizada no se publica públicamente de forma automática. El fundador debe marcar activamente un formulario de opt-in seleccionando si está "Buscando inversión" o "Abierto a conversaciones de adquisición", los datos a mostrar (industria, país, descripción) y si desea mostrar su score numérico o una insignia cualitativa (ej. "Alto potencial").
+3. **Moderación de Administrador:** Todo nuevo listado entra en estado `pending_review` y requiere aprobación manual de un administrador desde la pestaña de moderación del panel de control para hacerse público.
+4. **Protección de Datos ("Me interesa"):** No se expone el correo electrónico ni datos de contacto del fundador en el directorio público. Los inversionistas/VCs autenticados pueden hacer clic en "Me interesa" para registrar su interés, lo que envía una alerta por correo SMTP automática al fundador con los datos del inversionista para que el fundador decida si responder. Este botón está estrictamente restringido a cuentas de tipo inversionista/VC.
+5. **Vencimiento de Listados a los 60 días:** Los listados aprobados expiran automáticamente a los 60 días (configurable con `LISTING_EXPIRY_DAYS`). Unos días antes de expirar, el sistema envía un correo de advertencia con un enlace de un clic para renovarlo por otros 60 días.
+6. **Páginas Compartibles y Badges:** Cada empresa aprobada obtiene una página pública `/empresa/{slug}` con etiquetas Open Graph optimizadas para redes sociales (LinkedIn/Twitter), y un badge dinámico en formato de imagen SVG en `/empresa/{slug}/badge` para descargar y compartir.
+
+---
+
+## 10. Variables de Entorno y Configuración
 | Variable | Descripción | Valor por defecto |
 |---|---|---|
 | `LLM_PROVIDER` | Proveedor principal de LLM (`openrouter` \| `grok` \| `openai`) | `openrouter` |

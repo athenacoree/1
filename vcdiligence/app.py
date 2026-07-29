@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 # Local imports
 from vcdiligence.database import (
     init_db, get_db, SessionLocal, User, Organization, Report, Task, AuditLog,
-    ReportChange, Decision, PrecisionBenchmark
+    ReportChange, Decision, PrecisionBenchmark, CompanyListing, ListingInterest
 )
 from vcdiligence.security import hash_password, verify_password, create_access_token
 from vcdiligence.auth import get_current_user, require_admin
@@ -110,6 +110,15 @@ class MonitoringConfigRequest(BaseModel):
 class DecisionRequest(BaseModel):
     decision: str  # "invertimos", "pasamos", "en_evaluacion"
     notas: Optional[str] = None
+
+class CreateListingRequest(BaseModel):
+    report_id: int
+    category: str # "investment" or "acquisition"
+    visible_name: str
+    visible_industry: str
+    visible_country: str
+    visible_description: str
+    show_numerical_score: bool
 
 # ----------------- AUTHENTICATION ENDPOINTS -----------------
 
@@ -1276,6 +1285,372 @@ def list_benchmarks(current_user: User = Depends(require_admin), db: Session = D
             "created_at": b.created_at.isoformat()
         } for b in benchmarks
     ]
+
+# ----------------- DIRECTORY / FOUNDER LISTINGS ENDPOINTS -----------------
+
+@app.post("/listings")
+def create_or_update_listing(req: CreateListingRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    Creates or updates a company listing for a founder.
+    The report belongs to the founder's organization.
+    """
+    # Enforce tenant isolation / check that report belongs to user's organization
+    report = db.query(Report).filter_by(id=req.report_id, organization_id=current_user.organization_id).first()
+    if not report:
+        raise HTTPException(status_code=403, detail="Report not found or does not belong to your organization")
+
+    if req.category not in ["investment", "acquisition"]:
+        raise HTTPException(status_code=400, detail="Invalid category. Must be 'investment' or 'acquisition'")
+
+    # Generate slug from visible_name (clean it for URL friendliness)
+    # Ensure slug is unique by appending suffix if exists
+    base_slug = re.sub(r'[^a-z0-9]+', '-', req.visible_name.lower()).strip('-')
+    if not base_slug:
+        base_slug = "company"
+    slug = base_slug
+    counter = 1
+    while db.query(CompanyListing).filter_by(slug=slug).first():
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+
+    # Check if a listing already exists for this report
+    listing = db.query(CompanyListing).filter_by(report_id=req.report_id).first()
+    if listing:
+        # Update existing listing
+        listing.category = req.category
+        listing.visible_name = req.visible_name
+        listing.visible_industry = req.visible_industry
+        listing.visible_country = req.visible_country
+        listing.visible_description = req.visible_description
+        listing.show_numerical_score = req.show_numerical_score
+        # Keep status as pending_review or reset? Usually reset to pending_review for moderation safety on edit
+        listing.status = "pending_review"
+    else:
+        # Create new listing
+        listing = CompanyListing(
+            report_id=req.report_id,
+            user_id=current_user.id,
+            category=req.category,
+            slug=slug,
+            visible_name=req.visible_name,
+            visible_industry=req.visible_industry,
+            visible_country=req.visible_country,
+            visible_description=req.visible_description,
+            show_numerical_score=req.show_numerical_score,
+            status="pending_review"
+        )
+        db.add(listing)
+
+    db.commit()
+    db.refresh(listing)
+
+    return {
+        "status": "success",
+        "listing_id": listing.id,
+        "slug": listing.slug,
+        "listing_status": listing.status
+    }
+
+@app.get("/listings")
+def list_public_listings(
+    industry: Optional[str] = None,
+    country: Optional[str] = None,
+    category: Optional[str] = None,
+    min_score: Optional[int] = None,
+    page: int = 1,
+    limit: int = 10,
+    db: Session = Depends(get_db)
+):
+    """
+    Public directory of approved, non-expired company listings.
+    Supports filters: industry, country, category, min_score.
+    Includes simple pagination.
+    """
+    now = datetime.datetime.utcnow()
+    query = db.query(CompanyListing).join(Report, CompanyListing.report_id == Report.id).filter(
+        CompanyListing.status == "approved",
+        CompanyListing.expires_at > now
+    )
+
+    if industry:
+        query = query.filter(CompanyListing.visible_industry.ilike(f"%{industry}%"))
+    if country:
+        query = query.filter(CompanyListing.visible_country.ilike(f"%{country}%"))
+    if category:
+        query = query.filter(CompanyListing.category == category)
+    if min_score is not None:
+        query = query.filter(Report.score >= min_score)
+
+    total = query.count()
+    offset = (page - 1) * limit
+    listings = query.order_by(CompanyListing.approved_at.desc()).offset(offset).limit(limit).all()
+
+    output = []
+    for lst in listings:
+        score_display = None
+        qualitative_badge = "Alto potencial"
+        if lst.report.score >= 85:
+            qualitative_badge = "Excelente potencial"
+        elif lst.report.score < 70:
+            qualitative_badge = "Potencial emergente"
+
+        if lst.show_numerical_score:
+            score_display = lst.report.score
+
+        output.append({
+            "id": lst.id,
+            "slug": lst.slug,
+            "visible_name": lst.visible_name,
+            "visible_industry": lst.visible_industry,
+            "visible_country": lst.visible_country,
+            "visible_description": lst.visible_description,
+            "category": lst.category,
+            "score": score_display,
+            "qualitative_badge": qualitative_badge,
+            "verified": lst.user.verified_by_admin,
+            "created_at": lst.created_at.isoformat(),
+            "expires_at": lst.expires_at.isoformat() if lst.expires_at else None
+        })
+
+    return {
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "listings": output
+    }
+
+@app.get("/admin/listings")
+def list_admin_listings(current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """
+    Admin-only endpoint to view all listings and manage their moderation.
+    """
+    listings = db.query(CompanyListing).order_by(CompanyListing.created_at.desc()).all()
+    output = []
+    for lst in listings:
+        output.append({
+            "id": lst.id,
+            "slug": lst.slug,
+            "visible_name": lst.visible_name,
+            "visible_industry": lst.visible_industry,
+            "visible_country": lst.visible_country,
+            "visible_description": lst.visible_description,
+            "category": lst.category,
+            "score": lst.report.score,
+            "status": lst.status,
+            "created_at": lst.created_at.isoformat(),
+            "expires_at": lst.expires_at.isoformat() if lst.expires_at else None
+        })
+    return output
+
+@app.post("/admin/listings/{id}/approve")
+def approve_listing(
+    id: int,
+    approve: bool = Form(...),
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Approves or rejects a company listing.
+    When approved, sets:
+      - approved_at = now
+      - expires_at = now + LISTING_EXPIRY_DAYS
+    """
+    listing = db.query(CompanyListing).filter_by(id=id).first()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+
+    if approve:
+        expiry_days = int(os.getenv("LISTING_EXPIRY_DAYS", "60"))
+        now = datetime.datetime.utcnow()
+        listing.status = "approved"
+        listing.approved_at = now
+        listing.expires_at = now + datetime.timedelta(days=expiry_days)
+    else:
+        listing.status = "rejected"
+
+    db.commit()
+    db.refresh(listing)
+
+    return {
+        "status": "success",
+        "listing_id": listing.id,
+        "listing_status": listing.status,
+        "expires_at": listing.expires_at.isoformat() if listing.expires_at else None
+    }
+
+@app.post("/listings/{id}/renew")
+def renew_listing(id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    Allows a founder to renew their listing, extending the expiration date by LISTING_EXPIRY_DAYS.
+    """
+    listing = db.query(CompanyListing).filter_by(id=id).first()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+
+    # Only listing owner can renew
+    if listing.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You do not own this listing")
+
+    expiry_days = int(os.getenv("LISTING_EXPIRY_DAYS", "60"))
+    now = datetime.datetime.utcnow()
+    # Renew for another 60 days from now, and set status back to approved if it was hidden/expired
+    listing.expires_at = now + datetime.timedelta(days=expiry_days)
+    if listing.status == "rejected":
+        listing.status = "pending_review"  # Force re-moderation on rejected
+    else:
+        listing.status = "approved"  # Reactivate directly if it was expired or approved
+
+    db.commit()
+    db.refresh(listing)
+
+    return {
+        "status": "success",
+        "expires_at": listing.expires_at.isoformat(),
+        "listing_status": listing.status
+    }
+
+@app.get("/empresa/{slug}")
+def view_individual_listing(slug: str, db: Session = Depends(get_db)):
+    """
+    Serves a simple HTML response for the individual public startup listing page,
+    with Open Graph meta tags.
+    """
+    listing = db.query(CompanyListing).filter_by(slug=slug).first()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Startup not found")
+
+    # Only show approved, non-expired listings publicly, UNLESS it's an admin or the owner (we'll keep it simple: publicly only approved & non-expired)
+    now = datetime.datetime.utcnow()
+    is_active = (listing.status == "approved" and listing.expires_at and listing.expires_at > now)
+    if not is_active:
+         raise HTTPException(status_code=403, detail="This listing is currently inactive or under review")
+
+    # Qual badge calculation
+    qualitative_badge = "Alto potencial"
+    if listing.report.score >= 85:
+        qualitative_badge = "Excelente potencial"
+    elif listing.report.score < 70:
+        qualitative_badge = "Potencial emergente"
+
+    score_val = f"{listing.report.score}/100" if listing.show_numerical_score else qualitative_badge
+
+    # Read from the actual template file to avoid dead/unused code!
+    template_path = os.path.join(os.path.dirname(__file__), "templates", "empresa.html")
+    if not os.path.exists(template_path):
+        raise HTTPException(status_code=500, detail="Template empresa.html not found on disk")
+
+    with open(template_path, "r", encoding="utf-8") as f:
+        html_content = f.read()
+
+    # Simple placeholder substitution matching template
+    html_content = html_content.replace("{{ name }}", listing.visible_name)
+    html_content = html_content.replace("{{ score }}", score_val)
+    html_content = html_content.replace("{{ description }}", listing.visible_description)
+    html_content = html_content.replace("{{ slug }}", listing.slug)
+    html_content = html_content.replace("{{ industry }}", listing.visible_industry)
+    html_content = html_content.replace("{{ country }}", listing.visible_country)
+
+    category_val = "Buscando inversión" if listing.category == "investment" else "Abierto a conversaciones de adquisición"
+    html_content = html_content.replace("{% if category == \"investment\" %}Buscando inversión{% else %}Abierto a conversaciones de adquisición{% endif %}", category_val)
+
+    verified_val = "<span class='bg-cyan-500/15 text-cyan-400 text-[10px] uppercase font-bold px-2 py-0.5 rounded'>✔ Verificado</span>" if listing.user.verified_by_admin else ""
+    html_content = html_content.replace("{% if verified %}\n                        <span class='bg-cyan-500/15 text-cyan-400 text-[10px] uppercase font-bold px-2 py-0.5 rounded'>✔ Verificado</span>\n                        {% endif %}", verified_val)
+    html_content = html_content.replace("{% if verified %}\r\n                        <span class='bg-cyan-500/15 text-cyan-400 text-[10px] uppercase font-bold px-2 py-0.5 rounded'>✔ Verificado</span>\r\n                        {% endif %}", verified_val)
+    html_content = html_content.replace("{% if verified %}\n<span class='bg-cyan-500/15 text-cyan-400 text-[10px] uppercase font-bold px-2 py-0.5 rounded'>✔ Verificado</span>\n{% endif %}", verified_val)
+
+    html_content = html_content.replace("{{ expires_at }}", listing.expires_at.strftime('%Y-%m-%d'))
+    html_content = html_content.replace("{{ listing_id }}", str(listing.id))
+
+    return HTMLResponse(content=html_content)
+
+@app.get("/empresa/{slug}/badge")
+def view_listing_badge(slug: str, db: Session = Depends(get_db)):
+    """
+    Generates and returns an SVG image badge of the company's score/qualitative evaluation.
+    """
+    listing = db.query(CompanyListing).filter_by(slug=slug).first()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Startup not found")
+
+    qualitative_badge = "Alto potencial"
+    if listing.report.score >= 85:
+        qualitative_badge = "Excelente potencial"
+    elif listing.report.score < 70:
+        qualitative_badge = "Potencial emergente"
+
+    score_val = f"{listing.report.score}/100" if listing.show_numerical_score else qualitative_badge
+
+    svg_content = f"""<svg xmlns="http://www.w3.org/2000/svg" width="400" height="150" viewBox="0 0 400 150">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1e293b;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#22d3ee;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#34d399;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="400" height="150" rx="15" fill="url(#grad)" stroke="#334155" stroke-width="2"/>
+  <text x="25" y="45" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="20" font-weight="bold" fill="url(#textGrad)">{listing.visible_name}</text>
+  <text x="25" y="70" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" fill="#94a3b8">{listing.visible_industry} • {listing.visible_country}</text>
+  <rect x="25" y="90" width="350" height="40" rx="8" fill="#020617" stroke="#1e293b" stroke-width="1"/>
+  <text x="40" y="115" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#94a3b8">Investor Readiness Score:</text>
+  <text x="360" y="116" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="16" font-weight="extrabold" fill="#22d3ee" text-anchor="end">{score_val}</text>
+</svg>"""
+
+    return HTMLResponse(content=svg_content, media_type="image/svg+xml")
+
+@app.post("/listings/{id}/interest")
+def express_interest_on_listing(id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    Submits an expression of interest to the founder of a listing.
+    Visible only for authenticated users (the route is protected).
+    """
+    if current_user.account_type != "personal" and current_user.role != "administrador":
+        raise HTTPException(status_code=403, detail="Only VCs, investors or administrators can express interest in listings")
+
+    # Restrict button "Me interesa" to VC/investor users. In our roles: "analista" represents VC, but we also check if they are the owner of listing to prevent self-interest.
+    listing = db.query(CompanyListing).filter_by(id=id).first()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+
+    if listing.user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot show interest in your own listing")
+
+    # Guard each expression of interest in the `listing_interests` table
+    interest = db.query(ListingInterest).filter_by(listing_id=id, vc_user_id=current_user.id).first()
+    if interest:
+        raise HTTPException(status_code=400, detail="You have already registered interest in this listing")
+
+    interest = ListingInterest(listing_id=id, vc_user_id=current_user.id)
+    db.add(interest)
+    db.commit()
+
+    # SMTP Alert Notification (Notify the founder with details of who showed interest)
+    founder = listing.user
+    subject = f"🔥 [DealScout AI] Un inversionista se ha interesado en {listing.visible_name}!"
+    body = (
+        f"Hola {founder.email},\n\n"
+        f"¡Grandes noticias! Un inversionista ha manifestado interés en tu empresa '{listing.visible_name}' a través de DealScout AI.\n\n"
+        f"Detalles del inversionista:\n"
+        f"- Nombre / Organización: {current_user.company_name or 'Inversionista Independiente'}\n"
+        f"- Correo de contacto: {current_user.email}\n\n"
+        f"Ahora puedes decidir si deseas ponerte en contacto directamente con ellos respondiendo a este correo.\n\n"
+        f"Atentamente,\n"
+        f"El equipo de DealScout AI"
+    )
+
+    try:
+        from vcdiligence.monitoring import send_smtp_alert
+        send_smtp_alert(subject, body)
+    except Exception as s_err:
+        logger.error(f"Failed to dispatch interest alert SMTP email: {str(s_err)}")
+
+    return {
+        "status": "success",
+        "message": "Interest registered successfully. Founder has been notified."
+    }
 
 # ----------------- ADMIN DIRECT USER VERIFICATION ENDPOINT -----------------
 

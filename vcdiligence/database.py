@@ -175,6 +175,41 @@ class AuditLog(Base):
     target_company = Column(String, nullable=True)
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
 
+class CompanyListing(Base):
+    __tablename__ = "company_listings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    report_id = Column(Integer, ForeignKey("reports.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    category = Column(String, nullable=False) # "investment" or "acquisition"
+    slug = Column(String, unique=True, index=True, nullable=False)
+
+    # Visible public details chosen by the founder
+    visible_name = Column(String, nullable=False)
+    visible_industry = Column(String, nullable=False)
+    visible_country = Column(String, nullable=False)
+    visible_description = Column(Text, nullable=False)
+    show_numerical_score = Column(Boolean, default=False, nullable=False)
+
+    status = Column(String, default="pending_review", nullable=False) # "pending_review", "approved", "rejected"
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    approved_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+
+    report = relationship("Report")
+    user = relationship("User")
+
+class ListingInterest(Base):
+    __tablename__ = "listing_interests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    listing_id = Column(Integer, ForeignKey("company_listings.id"), nullable=False)
+    vc_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    listing = relationship("CompanyListing")
+    vc_user = relationship("User")
+
 def init_db():
     Base.metadata.create_all(bind=engine)
 

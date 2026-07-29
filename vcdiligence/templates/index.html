@@ -54,6 +54,23 @@
     showBenchmark: false,
     userDecision: '',
 
+    // Directory State
+    showDirectory: false,
+    directoryListings: [],
+    directoryPage: 1,
+    directoryTotal: 0,
+    directoryLimit: 10,
+    directoryFilters: { industry: '', country: '', category: '', minScore: '' },
+    showListingOptInModal: false,
+    optInReportId: null,
+    optInCategory: 'investment',
+    optInVisibleName: '',
+    optInVisibleIndustry: '',
+    optInVisibleCountry: '',
+    optInVisibleDescription: '',
+    optInShowNumericalScore: false,
+    adminListings: [],
+
     // Auth & Register inputs
     isRegistering: false,
     authEmail: '',
@@ -125,6 +142,8 @@
         await this.loadPublicStats();
         // Load Testimonials
         await this.loadPublicTestimonials();
+        // Load Public Directory
+        await this.loadDirectory();
 
         // Extract referral from URL
         const urlParams = new URLSearchParams(window.location.search);
@@ -411,6 +430,8 @@
 
             const eRes = await fetch('/admin/error-reports', { headers });
             this.adminErrorReports = await eRes.json();
+
+            await this.loadAdminListings();
         } catch (err) {
             console.error('Failed to load admin data', err);
         }
@@ -703,6 +724,144 @@
             return match[1].trim();
         }
         return 'Omission Analyst is validating content... No critical omissions found yet.';
+    },
+
+    async loadDirectory() {
+        try {
+            let url = `/listings?page=${this.directoryPage}&limit=${this.directoryLimit}`;
+            if (this.directoryFilters.industry) url += `&industry=${encodeURIComponent(this.directoryFilters.industry)}`;
+            if (this.directoryFilters.country) url += `&country=${encodeURIComponent(this.directoryFilters.country)}`;
+            if (this.directoryFilters.category) url += `&category=${encodeURIComponent(this.directoryFilters.category)}`;
+            if (this.directoryFilters.minScore) url += `&min_score=${encodeURIComponent(this.directoryFilters.minScore)}`;
+
+            const res = await fetch(url);
+            const data = await res.json();
+            this.directoryListings = data.listings || [];
+            this.directoryTotal = data.total || 0;
+        } catch (err) {
+            console.error('Failed to load directory listings', err);
+        }
+    },
+
+    openOptIn(report) {
+        this.optInReportId = report.id;
+        this.optInVisibleName = report.company_name;
+        this.optInVisibleIndustry = '';
+        this.optInVisibleCountry = '';
+        this.optInVisibleDescription = '';
+        this.optInShowNumericalScore = false;
+        this.optInCategory = 'investment';
+        this.showListingOptInModal = true;
+    },
+
+    async submitOptIn() {
+        if (!this.optInVisibleName || !this.optInVisibleIndustry || !this.optInVisibleCountry || !this.optInVisibleDescription) {
+            alert('Por favor, completa todos los campos obligatorios.');
+            return;
+        }
+        try {
+            const res = await fetch('/listings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + this.token
+                },
+                body: JSON.stringify({
+                    report_id: this.optInReportId,
+                    category: this.optInCategory,
+                    visible_name: this.optInVisibleName,
+                    visible_industry: this.optInVisibleIndustry,
+                    visible_country: this.optInVisibleCountry,
+                    visible_description: this.optInVisibleDescription,
+                    show_numerical_score: this.optInShowNumericalScore
+                })
+            });
+            const data = await res.json();
+            if (res.status === 200) {
+                alert('¡Listado creado con éxito! Está en estado pendiente de revisión por el administrador.');
+                this.showListingOptInModal = false;
+                await this.loadDirectory();
+            } else {
+                throw new Error(data.detail || 'Error al publicar listado');
+            }
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    async expressInterestOnDir(listingId) {
+        if (!this.token) {
+            alert('Debes iniciar sesión para mostrar interés.');
+            return;
+        }
+        try {
+            const res = await fetch(`/listings/${listingId}/interest`, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            const data = await res.json();
+            if (res.status === 200) {
+                alert('¡Interés registrado! El fundador ha sido notificado.');
+            } else {
+                throw new Error(data.detail || 'Error al registrar interés');
+            }
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    async renewDirListing(listingId) {
+        try {
+            const res = await fetch(`/listings/${listingId}/renew`, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            const data = await res.json();
+            if (res.status === 200) {
+                alert('¡Listado renovado por otros 60 días!');
+                await this.loadDirectory();
+                if (this.showAdminPanel) {
+                    await this.loadAdminListings();
+                }
+            } else {
+                throw new Error(data.detail || 'Error al renovar listado');
+            }
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    async loadAdminListings() {
+        try {
+            const res = await fetch('/admin/listings', {
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            this.adminListings = await res.json();
+        } catch (err) {
+            console.error('Failed to load admin listings', err);
+        }
+    },
+
+    async moderateListing(listingId, approve) {
+        try {
+            const formData = new FormData();
+            formData.append('approve', approve);
+            const res = await fetch(`/admin/listings/${listingId}/approve`, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token },
+                body: formData
+            });
+            if (res.status === 200) {
+                alert('Moderación de listado aplicada correctamente.');
+                await this.loadAdminListings();
+                await this.loadDirectory();
+            } else {
+                const data = await res.json();
+                throw new Error(data.detail || 'Error al moderar listado');
+            }
+        } catch (err) {
+            alert(err.message);
+        }
     }
 }">
 
@@ -726,6 +885,9 @@
             </div>
         </div>
         <div class="flex items-center space-x-4">
+            <button @click="showDirectory = !showDirectory; if (showDirectory) { loadDirectory(); }" class="text-xs font-bold text-slate-300 hover:text-white px-3 py-1.5 rounded-lg border border-slate-800 bg-slate-950/40">
+                <span x-text="showDirectory ? 'Volver al Inicio' : 'Directorio de Fundadores'"></span>
+            </button>
             <template x-if="user">
                 <div class="flex items-center space-x-2 sm:space-x-4">
                     <span @click="showProfileModal = true" class="text-xs text-slate-400 flex items-center bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-full backdrop-blur-md cursor-pointer hover:border-cyan-500">
@@ -766,6 +928,93 @@
     </header>
 
     <main class="flex-grow w-full max-w-6xl mx-auto px-6 py-8 z-10 flex flex-col items-center justify-center">
+
+        <!-- Directory Section -->
+        <div x-show="showDirectory" class="w-full space-y-6" style="display: none;">
+            <div class="glass p-6 rounded-3xl relative overflow-hidden space-y-4">
+                <div class="border-b border-slate-800 pb-4">
+                    <h2 class="text-3xl font-black text-white">Directorio de Fundadores e Inversión</h2>
+                    <p class="text-xs text-amber-400 font-semibold mt-2 bg-amber-500/10 p-3 rounded-xl border border-amber-500/20">
+                        ⚠️ <strong>Aviso Legal:</strong> Este directorio es solo un espacio de descubrimiento entre fundadores e inversionistas. La plataforma no gestiona fondos, no es intermediario financiero ni corredor de valores, y no participa en la negociación ni cierre de ningún trato. Toda conversación se maneja bajo el concepto "abierto a conversaciones de adquisición/inversión".
+                    </p>
+                </div>
+
+                <!-- Filters -->
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 bg-slate-950/40 p-4 rounded-2xl border border-slate-900 text-xs">
+                    <div>
+                        <label class="block font-bold text-slate-400 mb-1">Industria</label>
+                        <input type="text" x-model="directoryFilters.industry" @input="directoryPage = 1; loadDirectory()" placeholder="Ej. SaaS" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 outline-none text-slate-200">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-400 mb-1">País</label>
+                        <input type="text" x-model="directoryFilters.country" @input="directoryPage = 1; loadDirectory()" placeholder="Ej. México" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 outline-none text-slate-200">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-400 mb-1">Categoría</label>
+                        <select x-model="directoryFilters.category" @change="directoryPage = 1; loadDirectory()" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 outline-none text-slate-200">
+                            <option value="">Todas</option>
+                            <option value="investment">Buscando inversión</option>
+                            <option value="acquisition">Abierto a conversaciones de adquisición</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-400 mb-1">Score Mínimo</label>
+                        <input type="number" x-model.number="directoryFilters.minScore" @input="directoryPage = 1; loadDirectory()" placeholder="Ej. 70" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 outline-none text-slate-200">
+                    </div>
+                </div>
+
+                <!-- Listings Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+                    <template x-for="lst in directoryListings" :key="lst.id">
+                        <div class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col justify-between space-y-4 hover:border-cyan-500/30 transition-all">
+                            <div class="space-y-2">
+                                <div class="flex justify-between items-start gap-2">
+                                    <div>
+                                        <div class="flex items-center space-x-2">
+                                            <h3 class="font-extrabold text-lg text-white" x-text="lst.visible_name"></h3>
+                                            <template x-if="lst.verified">
+                                                <span class="bg-cyan-500/20 text-cyan-400 text-[9px] uppercase font-bold px-1.5 py-0.5 rounded">✔ Verificado</span>
+                                            </template>
+                                        </div>
+                                        <p class="text-[11px] text-slate-400" x-text="lst.visible_industry + ' • ' + lst.visible_country"></p>
+                                    </div>
+                                    <div class="p-2.5 rounded-xl bg-slate-950 text-center border border-slate-800 text-[10px]">
+                                        <span class="text-slate-500 block uppercase font-bold tracking-wider text-[8px]">Readiness</span>
+                                        <span class="font-bold text-cyan-400" x-text="lst.score !== null ? lst.score + '/100' : lst.qualitative_badge"></span>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-slate-300 leading-relaxed line-clamp-3" x-text="lst.visible_description"></p>
+                            </div>
+
+                            <div class="flex items-center justify-between text-[11px] border-t border-slate-800/60 pt-3">
+                                <span class="text-slate-400 font-medium" x-text="lst.category === 'investment' ? 'Buscando inversión' : 'Abierto a conversaciones de adquisición'"></span>
+                                <div class="flex gap-2">
+                                    <a :href="'/empresa/' + lst.slug" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-200 font-bold">Ver Perfil</a>
+                                    <button @click="expressInterestOnDir(lst.id)" class="px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold rounded-lg">Me interesa</button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Empty State -->
+                <template x-if="directoryListings.length === 0">
+                    <p class="text-xs text-slate-500 text-center py-12">No se encontraron listados que coincidan con los filtros.</p>
+                </template>
+
+                <!-- Pagination -->
+                <div class="flex justify-between items-center pt-4 border-t border-slate-800 text-xs">
+                    <span class="text-slate-400" x-text="'Total: ' + directoryTotal + ' listados'"></span>
+                    <div class="flex gap-2">
+                        <button :disabled="directoryPage <= 1" @click="directoryPage--; loadDirectory()" class="px-3 py-1.5 bg-slate-800 rounded hover:bg-slate-700 disabled:opacity-40">Anterior</button>
+                        <button :disabled="directoryPage * directoryLimit >= directoryTotal" @click="directoryPage++; loadDirectory()" class="px-3 py-1.5 bg-slate-800 rounded hover:bg-slate-700 disabled:opacity-40">Siguiente</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div x-show="!showDirectory" class="w-full">
+            <!-- Normal layout starts below -->
 
         <!-- Early Validation Banner (Unauthenticated only or Stats Hidden fallback) -->
         <template x-if="!token || (publicStats && !publicStats.show_stats)">
@@ -1087,6 +1336,9 @@
                                         </a>
                                     </div>
                                     <div class="flex gap-2">
+                                        <button @click="openOptIn(resultData)" class="px-4 py-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 rounded-xl text-xs font-bold border border-emerald-500/20 flex items-center space-x-1.5">
+                                            <span>Publicar en Directorio</span>
+                                        </button>
                                         <a :href="resultData ? '/reports/' + resultData.domain + '/pdf?token=' + token : '#'" target="_blank"
                                             class="px-4 py-2 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 rounded-xl text-xs font-bold border border-cyan-500/20 flex items-center space-x-1.5">
                                             <span>Download PDF</span>
@@ -1143,6 +1395,19 @@
                                     </div>
                                 </div>
 
+                                <!-- Simple Score Explanation adapted for Founders -->
+                                <div class="p-5 rounded-2xl bg-cyan-950/20 border border-cyan-900/40 space-y-2 mb-6">
+                                    <h4 class="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
+                                        <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01m-6.01-6h12m-12 3h12M6 9h12M6 6h12"></path>
+                                        </svg>
+                                        <span>💡 Explicación del Score para Fundadores (No-VCs)</span>
+                                    </h4>
+                                    <p class="text-[11px] text-slate-300 leading-relaxed">
+                                        Este score de preparación de inversionistas (Investor Readiness) mide la viabilidad de tu startup ante un fondo de inversión. Un puntaje de <strong>85+</strong> representa una preparación excelente para levantar capital o adquisición. Entre <strong>70 y 84</strong> indica un modelo de negocio con bases sólidas que está listo para iniciar conversaciones. Menos de <strong>70</strong> es una gran oportunidad para pulir tu tracción, mitigar riesgos operativos y perfeccionar tu pitch deck.
+                                    </p>
+                                </div>
+
                                 <!-- Tabs -->
                                 <div class="flex overflow-x-auto border-b border-slate-800/80 bg-slate-950/40 rounded-t-xl">
                                     <button @click="activeTab = 'executive'"
@@ -1186,6 +1451,7 @@
                 </div>
             </div>
         </template>
+        </div>
 
     </main>
 
@@ -1274,6 +1540,63 @@
         </div>
     </div>
 
+    <!-- Opt-In Listing Modal -->
+    <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto" x-show="showListingOptInModal" style="display: none;">
+        <div class="glass p-8 rounded-3xl max-w-lg w-full text-left space-y-4">
+            <h3 class="text-xl font-bold text-white">Publicar en el Directorio Público</h3>
+            <p class="text-xs text-amber-400 font-semibold bg-amber-500/10 p-3 rounded-xl border border-amber-500/20">
+                ⚠️ <strong>Aviso Legal Importante:</strong> Este directorio es solo un espacio de descubrimiento entre fundadores e inversionistas. La plataforma no gestiona fondos, no es intermediario financiero ni corredor de valores, y no participa en la negociación ni cierre de ningún trato.
+            </p>
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-bold uppercase text-slate-400 mb-1">Nombre Visible de la Empresa</label>
+                    <input type="text" x-model="optInVisibleName" placeholder="Ej. Acme Inc" class="w-full px-4 py-2.5 bg-slate-900 border border-slate-800 rounded-xl outline-none focus:border-cyan-500">
+                </div>
+                <div>
+                    <label class="block font-bold uppercase text-slate-400 mb-1">Industria</label>
+                    <input type="text" x-model="optInVisibleIndustry" placeholder="Ej. Inteligencia Artificial / SaaS" class="w-full px-4 py-2.5 bg-slate-900 border border-slate-800 rounded-xl outline-none focus:border-cyan-500">
+                </div>
+                <div>
+                    <label class="block font-bold uppercase text-slate-400 mb-1">País</label>
+                    <input type="text" x-model="optInVisibleCountry" placeholder="Ej. Chile" class="w-full px-4 py-2.5 bg-slate-900 border border-slate-800 rounded-xl outline-none focus:border-cyan-500">
+                </div>
+                <div>
+                    <label class="block font-bold uppercase text-slate-400 mb-1">Descripción Corta de la Empresa</label>
+                    <textarea x-model="optInVisibleDescription" rows="3" placeholder="Una descripción simple..." class="w-full px-4 py-2.5 bg-slate-900 border border-slate-800 rounded-xl outline-none focus:border-cyan-500"></textarea>
+                </div>
+                <div>
+                    <label class="block font-bold uppercase text-slate-400 mb-1">Categoría de Publicación</label>
+                    <div class="flex gap-4 mt-1">
+                        <label class="flex items-center space-x-2 cursor-pointer">
+                            <input type="radio" x-model="optInCategory" value="investment" class="bg-slate-900 border-slate-800 text-cyan-500 focus:ring-cyan-500">
+                            <span>Buscando inversión (Levantando capital)</span>
+                        </label>
+                        <label class="flex items-center space-x-2 cursor-pointer">
+                            <input type="radio" x-model="optInCategory" value="acquisition" class="bg-slate-900 border-slate-800 text-cyan-500 focus:ring-cyan-500">
+                            <span>Abierto a conversaciones de adquisición</span>
+                        </label>
+                    </div>
+                </div>
+                <div>
+                    <label class="flex items-center space-x-2 cursor-pointer pt-2">
+                        <input type="checkbox" x-model="optInShowNumericalScore" class="rounded bg-slate-900 border-slate-800 text-cyan-500 focus:ring-cyan-500">
+                        <span>Mostrar mi score numérico de inversión (si se desmarca, se mostrará una insignia cualitativa como "Alto potencial")</span>
+                    </label>
+                </div>
+
+                <div class="flex gap-2 pt-4">
+                    <button @click="submitOptIn()" class="flex-grow py-3 bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold rounded-xl">
+                        Solicitar Publicación
+                    </button>
+                    <button @click="showListingOptInModal = false" class="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- User Profile Modal with Referral Links -->
     <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4" x-show="showProfileModal" style="display: none;">
         <div class="glass p-8 rounded-3xl max-w-md w-full text-left" x-data="{ copied: false }">
@@ -1326,6 +1649,55 @@
             </div>
 
             <div class="grid grid-cols-1 gap-8 text-xs">
+
+                <!-- Section 0: Company Listings Moderation -->
+                <div class="p-6 bg-slate-900/40 border border-slate-800 rounded-2xl">
+                    <h4 class="text-sm font-bold text-yellow-400 uppercase tracking-wider mb-3">Moderación de Listados de Empresas</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b border-slate-800 text-slate-400">
+                                    <th class="py-2 px-3">Nombre Visible</th>
+                                    <th class="py-2 px-3">Categoría</th>
+                                    <th class="py-2 px-3">Industria / País</th>
+                                    <th class="py-2 px-3">Score</th>
+                                    <th class="py-2 px-3">Vencimiento</th>
+                                    <th class="py-2 px-3">Estado</th>
+                                    <th class="py-2 px-3">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="lst in adminListings" :key="lst.id">
+                                    <tr class="border-b border-slate-800/40 hover:bg-slate-800/20">
+                                        <td class="py-2.5 px-3">
+                                            <a :href="'/empresa/' + lst.slug" target="_blank" class="text-cyan-400 font-bold hover:underline" x-text="lst.visible_name"></a>
+                                        </td>
+                                        <td class="py-2.5 px-3" x-text="lst.category === 'investment' ? 'Buscando inversión' : 'Adquisición/Inversión'"></td>
+                                        <td class="py-2.5 px-3" x-text="lst.visible_industry + ' • ' + lst.visible_country"></td>
+                                        <td class="py-2.5 px-3 font-bold text-white" x-text="lst.score"></td>
+                                        <td class="py-2.5 px-3" x-text="lst.expires_at ? lst.expires_at.split('T')[0] : 'No aprobado'"></td>
+                                        <td class="py-2.5 px-3">
+                                            <span class="px-1.5 py-0.5 rounded text-[10px]" :class="{
+                                                'bg-emerald-500/20 text-emerald-400': lst.status === 'approved',
+                                                'bg-yellow-500/20 text-yellow-400': lst.status === 'pending_review',
+                                                'bg-red-500/20 text-red-400': lst.status === 'rejected',
+                                            }" x-text="lst.status"></span>
+                                        </td>
+                                        <td class="py-2.5 px-3 space-x-1">
+                                            <template x-if="lst.status === 'pending_review' || lst.status === 'rejected'">
+                                                <button @click="moderateListing(lst.id, true)" class="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded">Aprobar</button>
+                                            </template>
+                                            <template x-if="lst.status === 'approved'">
+                                                <button @click="renewDirListing(lst.id)" class="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded">Renovar 60d</button>
+                                            </template>
+                                            <button @click="moderateListing(lst.id, false)" class="px-2 py-1 bg-red-950/40 text-red-400 border border-red-500/20 rounded">Rechazar/Eliminar</button>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
 
                 <!-- Section 1: Users & Domains Verification -->
                 <div class="p-6 bg-slate-900/40 border border-slate-800 rounded-2xl">
