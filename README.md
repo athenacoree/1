@@ -139,7 +139,9 @@ The system is designed to be **efficient and lightweight** in production:
 
 This **on-demand** approach allows deploying the application in the cloud with optimized costs and no unnecessary background services running.
 ---
-este enlace a continuacion tiene la bibliografia de el creador que se ira actualizando periodicamente 
-para cualquier duda sobre el perfil profexional de el creador visitar el siguiente enlace a un repositorio 
-datos del creador https://github.com/athenacoree/MARLON-BAEZ-MENDEZ-
+## 👨‍💻 Creador
+
+**DealScout AI** es un proyecto creado y mantenido por **[Marlon Baez Mendez](https://github.com/athenacoree/MARLON-BAEZ-MENDEZ-)**.
+
+Para más información sobre el autor, consulta su [bibliografía oficial](https://github.com/athenacoree/MARLON-BAEZ-MENDEZ-).
 *For detailed instructions on architectural layers and multi-provider cognitive configurations, please check [EXPLICACION_PROYECTO.md](EXPLICACION_PROYECTO.md).*
