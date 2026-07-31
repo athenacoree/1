@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "Si usas este software, por favor cítalo como:"
+authors:
+  - family-names: "Baez Mendez"
+    given-names: "Marlon"
+    orcid: "https://orcid.org/tu-orcid" # Opcional
+title: "DealScout AI - Multi-Agent Venture Capital Due Diligence"
+version: 1.0.0
+date-released: 2026-07-23
+url: "https://github.com/athenacoree/1"
