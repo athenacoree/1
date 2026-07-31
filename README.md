@@ -125,7 +125,19 @@ To execute the unit and integration test suite and ensure no regressions exist a
 ```bash
 poetry run python -m unittest discover -s tests
 ```
+## ⚡ Resource Optimization
 
+The system is designed to be **efficient and lightweight** in production:
+
+- **Single LLM**: The system uses **only one** LLM provider configurable via `LLM_PROVIDER` (OpenRouter, Grok, or OpenAI). It does not run multiple models simultaneously, simplifying costs and maintenance.
+
+- **Playwright on-demand**: The smart scraper first attempts with `requests/BS4` (fast and no overhead). **Only** if it detects Cloudflare, heavy JavaScript, or SPAs, it activates Playwright headless. Once scraping is complete, the browser **automatically shuts down** to free resources.
+
+- **SMTP as internal function**: The email service is not a standalone server. It runs **as a function within the code** that activates **only when needed** (notifications, expiration alerts, contacts). After sending the email, the connection closes.
+
+- **Automatic database**: In environments like Render, the database (PostgreSQL) is automatically provisioned via `DATABASE_URL`. In development, it defaults to SQLite with no additional configuration.
+
+This **on-demand** approach allows deploying the application in the cloud with optimized costs and no unnecessary background services running.
 ---
 
 *For detailed instructions on architectural layers and multi-provider cognitive configurations, please check [EXPLICACION_PROYECTO.md](EXPLICACION_PROYECTO.md).*
