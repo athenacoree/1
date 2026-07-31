@@ -139,5 +139,5 @@ The system is designed to be **efficient and lightweight** in production:
 
 This **on-demand** approach allows deploying the application in the cloud with optimized costs and no unnecessary background services running.
 ---
-
+datos del creador https://github.com/athenacoree/MARLON-BAEZ-MENDEZ-
 *For detailed instructions on architectural layers and multi-provider cognitive configurations, please check [EXPLICACION_PROYECTO.md](EXPLICACION_PROYECTO.md).*
