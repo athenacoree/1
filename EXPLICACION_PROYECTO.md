@@ -116,14 +116,44 @@ Hemos introducido una suite completa de validación, prueba social y canales dir
 
 ---
 
-## 9. Directorio de Dos Lados (Fundadores e Inversión)
-Hemos expandido DealScout AI para convertirse en un directorio de dos lados que conecta fundadores que buscan capital o están abiertos a adquisición con inversionistas/VCs de todo el mundo:
-1. **Perfil de Fundador y Autoanálisis:** Los fundadores pueden realizar autoanálisis de sus propias empresas utilizando los flujos asíncronos de análisis existentes y ver un reporte detallado con una explicación sencilla y amigable adaptada para fundadores (no técnica de VC).
-2. **Opt-In Explícito para Publicación:** Una empresa analizada no se publica públicamente de forma automática. El fundador debe marcar activamente un formulario de opt-in seleccionando si está "Buscando inversión" o "Abierto a conversaciones de adquisición", los datos a mostrar (industria, país, descripción) y si desea mostrar su score numérico o una insignia cualitativa (ej. "Alto potencial").
-3. **Moderación de Administrador:** Todo nuevo listado entra en estado `pending_review` y requiere aprobación manual de un administrador desde la pestaña de moderación del panel de control para hacerse público.
-4. **Protección de Datos ("Me interesa"):** No se expone el correo electrónico ni datos de contacto del fundador en el directorio público. Los inversionistas/VCs autenticados pueden hacer clic en "Me interesa" para registrar su interés, lo que envía una alerta por correo SMTP automática al fundador con los datos del inversionista para que el fundador decida si responder. Este botón está estrictamente restringido a cuentas de tipo inversionista/VC.
-5. **Vencimiento de Listados a los 60 días:** Los listados aprobados expiran automáticamente a los 60 días (configurable con `LISTING_EXPIRY_DAYS`). Unos días antes de expirar, el sistema envía un correo de advertencia con un enlace de un clic para renovarlo por otros 60 días.
-6. **Páginas Compartibles y Badges:** Cada empresa aprobada obtiene una página pública `/empresa/{slug}` con etiquetas Open Graph optimizadas para redes sociales (LinkedIn/Twitter), y un badge dinámico en formato de imagen SVG en `/empresa/{slug}/badge` para descargar y compartir.
+## 9. Directorio de Dos Lados (Fundadores e Inversión) y Modelos de Persistencia
+Hemos expandido DealScout AI para convertirse en un directorio de dos lados altamente estructurado, que conecta a fundadores que buscan capital o están abiertos a adquisición con inversionistas/VCs de todo el mundo. Esta característica se apoya en modelos de base de datos relacionales, flujos avanzados de verificación de cuentas y alertas SMTP automáticas:
+
+### 1. Modelado de Base de Datos (SQLAlchemy)
+El backend implementa dos tablas relacionales específicas para soportar este flujo de negocio:
+- **`CompanyListing` (Tabla `company_listings`):** Almacena la propuesta pública de la startup.
+  - `id` (Clave primaria).
+  - `report_id` (Relación FK con la tabla `reports` para vincular el score y hallazgos).
+  - `user_id` (Relación FK con la tabla `users` para identificar al fundador propietario).
+  - `category` (`"investment"` o `"acquisition"`).
+  - `slug` (Generado de forma única a partir del nombre corporativo para URL amigable, ej. `/empresa/stripe`).
+  - `visible_name`, `visible_industry`, `visible_country`, `visible_description` (Datos proporcionados mediante el Opt-In de privacidad).
+  - `show_numerical_score` (Booleano para alternar entre el score numérico o el badge cualitativo).
+  - `status` (`pending_review`, `approved`, `rejected` para la moderación).
+  - `expires_at` / `approved_at` (Marcas de tiempo de control de ciclo de vida).
+- **`ListingInterest` (Tabla `listing_interests`):** Registra las expresiones de interés ("Me interesa") enviadas por los inversionistas.
+  - `id` (Clave primaria).
+  - `listing_id` (FK a `company_listings`).
+  - `vc_user_id` (FK a `users` que identifica al inversionista interesado).
+  - `created_at` (Timestamp de registro).
+
+### 2. Flujo Completo de Registro y Verificación de Cuentas (Founder / VC)
+Para garantizar la autenticidad en el marketplace de dos lados, implementamos dos niveles de verificación de identidad:
+- **Verificación Automática de Dominio (`verified_domain`):** Al registrarse una cuenta tipo `empresa`, el sistema extrae el dominio del correo electrónico de registro (ej. `email = founder@stripe.com`) y el dominio purificado del sitio web oficial de la compañía (ej. `company_website = https://stripe.com`). Si coinciden y no pertenecen a un proveedor público común (como Gmail o Yahoo), el campo `verified_domain` se marca automáticamente como `true` en la base de datos.
+- **Verificación Manual de Administrador (`verified_by_admin`):** Los administradores pueden visualizar toda la lista de usuarios mediante el endpoint `/admin/users` y activar manualmente la insignia VIP `verified_by_admin` utilizando `/admin/users/{id}/verify-by-admin` para certificar cuentas de socios clave de forma manual.
+
+### 3. Lógica del Botón "Me interesa" y Alertas de Lead Generation
+- **Restricción de Roles:** El botón "Me interesa" está estrictamente bloqueado para fundadores o dueños de su propia publicación. Solo usuarios autenticados con cuentas tipo `personal` (Inversionistas / VCs) o administradores pueden accionarlo.
+- **Notificación por SMTP instantánea:** Al activarse la expresión de interés, el sistema registra el registro de interés en la base de datos para prevenir duplicados y despacha una alerta por correo SMTP automática al fundador (`founder.email`) detallando el nombre de la startup que generó interés, el nombre/firma del inversionista y su correo de contacto directo para permitir la comunicación bidireccional inmediata.
+
+### 4. Ciclo de Vida y Proceso de Renovación de Listados
+Los listados aprobados expiran automáticamente a los 60 días (ajustable mediante la variable de entorno `LISTING_EXPIRY_DAYS`).
+- El planificador continuo `monitoring.py` comprueba diariamente el vencimiento.
+- Antes de ocultar el listado, el sistema despacha una advertencia automatizada al correo del fundador incluyendo un enlace directo firmado que permite renovar la publicación por otros 60 días de manera inmediata y sencilla con un solo clic.
+
+### 5. Páginas Compartibles y Badges Dinámicos SVG
+- **Páginas con Metadatos Open Graph (`/empresa/{slug}`):** Se sirven páginas estáticas renderizadas en el servidor usando reemplazos controlados sobre `templates/empresa.html`, inyectando metadatos OG de Twitter y LinkedIn optimizados para que las startups compartan su perfil de readiness en redes sociales.
+- **Badge en formato SVG (`/empresa/{slug}/badge`):** Genera en tiempo real un gráfico vectorial SVG impecable con el nombre, sector, país e Investor Readiness Score (o insignia cualitativa) de la startup, listo para ser incrustado en el sitio web de la compañía o repositorios de GitHub.
 
 ---
 
