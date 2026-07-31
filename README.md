@@ -1,5 +1,8 @@
 # DealScout AI — Multi-Agent Venture Capital Due Diligence & Investment Directory
 
+nota importante : solo necesita una sola api de ai para funcionar mas adelante se le describe los modelos que se pueden utilizar 
+el sistema esta echo tanto para funcionar a bajo consumo desde un por ejemplo render gratuito manteniendo un rendimiento estable y seguro , como para correr en algo mas potencia el cambio de potencia lo hace significativamente veloz y esta adaptado para adaptar e a entornos y dificultades trabaja bien con poco recursos 
+
 DealScout AI (configured as `VCDueDiligenceAgent`) is an autonomous, enterprise-grade Venture Capital due diligence engine and interactive dual-sided marketplace. Powered by **FastAPI**, **SQLAlchemy**, and **CrewAI**, it automates the process of analyzing startups from public URLs, Pitch Decks (PDF/PPTX), or LinkedIn profiles. It acts as a comprehensive decision-support system, generating detailed white-label investment reports, readiness scores (0-100), and a secure directory to match founders with qualified buyers and investors.
 
 ---
@@ -41,7 +44,7 @@ Configure your environment by duplicating `.env.example` to `.env`. Below is the
 
 | Variable | Description | Default Value / Option |
 |---|---|---|
-| `LLM_PROVIDER` | Main LLM provider engine | `openrouter` \| `grok` \| `openai` |
+| `LLM_PROVIDER` | Main LLM provider engine | `openrouter` \| `grok` \| `openai is optional onli need one api ai no more ` |
 | `API_KEY_OPENROUTER` | API credential for OpenRouter | Optional |
 | `MODEL_OPENROUTER` | Selected model on OpenRouter platform | `meta-llama/llama-3.3-70b-instruct` |
 | `API_KEY_GROK` | API credential for xAI Grok Console | Optional |
