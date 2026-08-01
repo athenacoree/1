@@ -195,3 +195,43 @@ Los listados aprobados expiran automáticamente a los 60 días (ajustable median
    Abre tu navegador en `http://localhost:10000` e ingresa con:
    - Email: `analyst@dealscout.ai`
    - Password: `analystpassword`
+
+---
+
+## 11. Arquitectura de Preferencias del Inversionista y Orquestación Inteligente de Fuentes
+
+En las últimas actualizaciones, hemos integrado una suite avanzada de personalización y eficiencia de recursos orientada a optimizar el tiempo de procesamiento y no saturar los planes de alojamiento gratuitos (como Render Free Tier).
+
+### A. Preferencias de Usuario (Fuentes Personalizadas + Tesis)
+Cada analista o inversionista puede definir en su panel de **Ajustes** cómo desea que el sistema realice la diligencia debida:
+1. **Fuentes de Datos Preferidas:** Una lista de las 5 fuentes públicas principales (SEC EDGAR, OpenCorporates, USPTO, CourtListener, GitHub). Si se seleccionan manualmente, el orquestador prioriza estas fuentes por sobre el flujo heurístico automático (el usuario siempre tiene la última palabra).
+2. **Prioridades de Análisis (Tesis de Inversión):** Selección de las áreas clave en las que el analista quiere poner foco:
+   - `legal_risk` (Riesgo legal y regulaciones)
+   - `product_traction` (Tracción de producto y métricas)
+   - `founding_team` (Experiencia del equipo fundador)
+   - `competition` (Análisis competitivo y moats)
+   - `financials` (Métricas financieras y viabilidad)
+3. **Palabras Clave de Enfoque:** Texto libre que permite buscar de forma dirigida temas específicos en el contenido de la startup (ej. "cumplimiento GDPR", "inteligencia artificial", "stack de datos").
+
+Estas preferencias se inyectan dinámicamente como un bloque de instrucciones estructurado (`user_priorities_block`) en la descripción de todas las tareas del CrewAI, re-alineando las prioridades de cognición de los agentes autónomos de forma instantánea.
+
+### B. Orquestador de Fuentes Inteligentes (Necesarias vs. Condicionales)
+El archivo `source_orchestrator.py` introduce un motor de orquestación reactivo para dividir la consulta de fuentes externas en dos fases lógicas:
+- **Fuentes Necesarias (Siempre Activas):** `sec_edgar`, `opencorporates`, `uspto`, `courtlistener`, `github`, `ofac` y `whois`. Se ejecutan de manera estándar, salvo que el usuario las haya excluido de forma explícita de su lista de preferencias.
+- **Fuentes Condicionales (Heurísticas Reactivas):** `sec_litigation`, `ftc_enforcement`, `cfpb_complaints`, `wipo_brands`, `uk_companies_house`, `wayback` y `gdelt_news`. Estas fuentes solo se activan si se cumplen reglas heurísticas precisas durante el análisis primario o se detectan patrones específicos en el texto scrapeado:
+
+| Fuente Condicional | Regla Heurística de Activación Dinámica | Razón del Disparo |
+|---|---|---|
+| `sec_litigation` <br> `ftc_enforcement` | Si `courtlistener` o `sec_edgar` devuelven status `"found"` (lo que indica existencia de registros legales o corporativos previos). | Investigar posibles riesgos de litigios o cumplimientos federales a nivel más profundo. |
+| `cfpb_complaints` | Si el sitio web scrapeado contiene términos como `"fintech"`, `"payments"`, `"lending"`, `"banking"`, `"pagos"`, `"préstamos"` o `"banca"`. | Buscar quejas formales de consumidores financieros registrados ante la CFPB. |
+| `wipo_brands` | Si el dominio no termina en `.com`/`.us`/`.io` o el texto menciona regiones fuera de EE.UU. como `"Spain"`, `"México"`, `"España"`, `"Colombia"`, etc. | Validar marcas y registros de propiedad industrial en la base de datos internacional de la OMPI. |
+| `uk_companies_house` | Si el dominio contiene `.co.uk` o el texto menciona `"United Kingdom"`, `"Reino Unido"`, `"London"` o `"Londres"`. | Consultar el registro corporativo oficial del Reino Unido (Companies House) con autenticación API. |
+| `wayback` | Si la fecha de registro del dominio recuperada por `WHOIS` difiere en más de 2 años de cualquier año de fundación detectado en el scraping. | Investigar el historial antiguo de capturas en la Wayback Machine para detectar inconsistencias de antigüedad (pivotaje o re-adquisición de dominio). |
+| `gdelt_news` | Si `courtlistener`, `sec_litigation` u `ofac` encuentran registros positivos en su base de datos corporativa. | Recopilar cobertura de prensa internacional reciente para contextualizar litigios activos o sanciones detectadas. |
+
+### C. Eficiencia de Recursos y Resiliencia en Render
+- **Concurrencia con Límite de Workers:** Se utiliza `concurrent.futures.ThreadPoolExecutor(max_workers=3)` al consultar fuentes necesarias y condicionales, minimizando el impacto de procesamiento y evitando sobrepasar las limitaciones de hilos de los planes gratuitos de Render.
+- **Circuit Breaker de Resiliencia:** El orquestador cuenta con un interruptor que monitorea fallas consecutivas por fuente externa. Si una fuente falla 3 veces seguidas (debido a rate-limits, APIs caídas o bloqueos de red), se le marca temporalmente como "en pausa" por 2 horas, omitiendo su consulta de forma elegante y devolviendo el estado `"skipped_circuit_breaker"`. Esto previene retrasos de timeout redundantes y protege el flujo global de análisis asíncronos.
+- **Custom Cache TTL:** El sistema de caché local en disco ha sido optimizado con TTLs variables para evitar consultas repetitivas de red:
+  - **WHOIS:** Cache de 30 días (720 horas) dado que los registros de dominios son altamente estables.
+  - **Demás fuentes:** Cache estándar de 24 horas para reflejar información reciente.

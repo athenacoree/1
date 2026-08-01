@@ -65,13 +65,17 @@ def on_startup():
 
         # Start APScheduler for background continuous monitoring
         from apscheduler.schedulers.background import BackgroundScheduler
-        from vcdiligence.monitoring import run_continuous_monitoring_job
+        from vcdiligence.monitoring import run_continuous_monitoring_job, refresh_ofac_local_list
 
         scheduler = BackgroundScheduler()
         interval_hours = int(os.getenv("MONITORING_JOB_INTERVAL_HOURS", "24"))
         scheduler.add_job(run_continuous_monitoring_job, "interval", hours=interval_hours, id="continuous_monitoring")
+
+        # Register weekly OFAC list download job (every Sunday at midnight)
+        scheduler.add_job(refresh_ofac_local_list, "cron", day_of_week="sun", hour=0, minute=0, id="ofac_weekly_refresh")
+
         scheduler.start()
-        logger.info(f"APScheduler started. Configured monitoring job to run every {interval_hours} hours.")
+        logger.info(f"APScheduler started. Configured monitoring job to run every {interval_hours} hours, and weekly OFAC list refresh.")
     except Exception as e:
         logger.error(f"Error during startup initialization: {str(e)}")
     finally:
@@ -194,7 +198,10 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
             "company_website": user.company_website,
             "verified_domain": user.verified_domain,
             "verified_by_admin": user.verified_by_admin,
-            "referral_code": user.referral_code
+            "referral_code": user.referral_code,
+            "enabled_sources": user.enabled_sources or [],
+            "analysis_priorities": user.analysis_priorities or [],
+            "custom_focus_keywords": user.custom_focus_keywords or ""
         }
     }
 
@@ -220,7 +227,10 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
             "company_website": user.company_website,
             "verified_domain": user.verified_domain,
             "verified_by_admin": user.verified_by_admin,
-            "referral_code": user.referral_code
+            "referral_code": user.referral_code,
+            "enabled_sources": user.enabled_sources or [],
+            "analysis_priorities": user.analysis_priorities or [],
+            "custom_focus_keywords": user.custom_focus_keywords or ""
         }
     }
 
@@ -239,6 +249,9 @@ def get_me(current_user: User = Depends(get_current_user), db: Session = Depends
         "referral_code": current_user.referral_code,
         "referred_by_id": current_user.referred_by_id,
         "profile_photo_path": current_user.profile_photo_path,
+        "enabled_sources": current_user.enabled_sources or [],
+        "analysis_priorities": current_user.analysis_priorities or [],
+        "custom_focus_keywords": current_user.custom_focus_keywords or "",
         "organization": {
             "id": org.id,
             "company_name": org.company_name,
@@ -543,21 +556,39 @@ def update_profile(
 
 @app.post("/settings")
 def update_settings(
-    company_name: str = Form(...),
+    company_name: Optional[str] = Form(None),
     logo: Optional[UploadFile] = File(None),
-    current_user: User = Depends(require_admin),
+    enabled_sources: Optional[str] = Form(None),
+    analysis_priorities: Optional[str] = Form(None),
+    custom_focus_keywords: Optional[str] = Form(""),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Saves custom logo and organization name. Restricted to administrador.
+    Saves user priorities, preferred sources, and custom focus keywords.
+    Also saves custom logo and organization name if the user is an administrator.
     """
     org = db.query(Organization).filter_by(id=current_user.organization_id).first()
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    org.company_name = company_name
+    # Only administrators can modify organization settings (company name, logo)
+    if logo and current_user.role != "administrador":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Modifying organization custom logo is restricted to administrators."
+        )
 
-    if logo:
+    if company_name and company_name != org.company_name:
+        if current_user.role != "administrador":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Modifying organization name is restricted to administrators."
+            )
+        else:
+            org.company_name = company_name
+
+    if logo and current_user.role == "administrador":
         # Save custom logo file on disk inside safe static uploads directory
         static_logos_dir = os.path.join("vcdiligence", "static", "logos")
         os.makedirs(static_logos_dir, exist_ok=True)
@@ -572,6 +603,28 @@ def update_settings(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to save uploaded logo: {str(e)}")
 
+    # Update User analysis preferences
+    if enabled_sources is not None:
+        try:
+            parsed_sources = json.loads(enabled_sources)
+            if not isinstance(parsed_sources, list):
+                parsed_sources = [parsed_sources]
+        except Exception:
+            parsed_sources = [s.strip() for s in enabled_sources.split(",") if s.strip()]
+        current_user.enabled_sources = parsed_sources
+
+    if analysis_priorities is not None:
+        try:
+            parsed_priorities = json.loads(analysis_priorities)
+            if not isinstance(parsed_priorities, list):
+                parsed_priorities = [parsed_priorities]
+        except Exception:
+            parsed_priorities = [p.strip() for p in analysis_priorities.split(",") if p.strip()]
+        current_user.analysis_priorities = parsed_priorities
+
+    if custom_focus_keywords is not None:
+        current_user.custom_focus_keywords = custom_focus_keywords
+
     db.commit()
 
     # Audit log
@@ -580,7 +633,7 @@ def update_settings(
         user_email=current_user.email,
         organization_id=current_user.organization_id,
         action="update_settings",
-        target_company=company_name
+        target_company=company_name or org.company_name
     )
     db.add(audit)
     db.commit()
@@ -588,7 +641,10 @@ def update_settings(
     return {
         "status": "success",
         "company_name": org.company_name,
-        "logo_path": org.logo_path
+        "logo_path": org.logo_path,
+        "enabled_sources": current_user.enabled_sources or [],
+        "analysis_priorities": current_user.analysis_priorities or [],
+        "custom_focus_keywords": current_user.custom_focus_keywords or ""
     }
 
 # ----------------- ANALYSIS ENDPOINTS (MULTI-TENANT) -----------------
@@ -726,7 +782,10 @@ def start_analysis(
         user_id=current_user.id,
         user_email=current_user.email,
         extra_context=extra_ctx if extra_ctx else None,
-        notify_email=req.notify_email
+        notify_email=req.notify_email,
+        user_enabled_sources=current_user.enabled_sources,
+        user_priorities=current_user.analysis_priorities,
+        custom_focus_keywords=current_user.custom_focus_keywords
     )
 
     return {"status": "running", "task_id": task_id}
@@ -961,7 +1020,10 @@ def upload_and_analyze(
         user_id=current_user.id,
         user_email=current_user.email,
         extra_context=extra_ctx if extra_ctx else None,
-        notify_email=notify_email
+        notify_email=notify_email,
+        user_enabled_sources=current_user.enabled_sources,
+        user_priorities=current_user.analysis_priorities,
+        custom_focus_keywords=current_user.custom_focus_keywords
     )
 
     return {"status": "running", "task_id": task_id}

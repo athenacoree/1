@@ -13,12 +13,15 @@ if not DATABASE_URL:
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
+from sqlalchemy.pool import NullPool
+
 # SQLite-specific arguments (e.g., check_same_thread)
 connect_args = {}
 if DATABASE_URL.startswith("sqlite"):
     connect_args["check_same_thread"] = False
-
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
+    engine = create_engine(DATABASE_URL, connect_args=connect_args, poolclass=NullPool)
+else:
+    engine = create_engine(DATABASE_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -53,6 +56,11 @@ class User(Base):
     profile_photo_path = Column(String, nullable=True)
     referral_code = Column(String, unique=True, index=True, nullable=True)
     referred_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # User analysis preferences
+    enabled_sources = Column(JSON, default=list, nullable=True)
+    analysis_priorities = Column(JSON, default=list, nullable=True)
+    custom_focus_keywords = Column(String, default="", nullable=False)
 
     organization = relationship("Organization", back_populates="users")
 

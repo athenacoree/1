@@ -4409,6 +4409,21 @@ typing-extensions = ">=4.9.0"
 XlsxWriter = ">=0.5.7"
 
 [[package]]
+name = "python-whois"
+version = "0.9.6"
+description = "Whois querying and parsing of domain registration information."
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "python_whois-0.9.6-py3-none-any.whl", hash = "sha256:153261941a4d238b1278a4ca9b5b5e0590ed3b4d0c534ba111c4434d5d339410"},
+    {file = "python_whois-0.9.6.tar.gz", hash = "sha256:2e6de7b6d70e305a85f4859cd17781ee3f0da3a02a8e94f23cb4cdcd2e400bfa"},
+]
+
+[package.dependencies]
+python-dateutil = "*"
+
+[[package]]
 name = "pytube"
 version = "15.0.0"
 description = "Python 3 library for downloading YouTube Videos."
@@ -6073,4 +6088,4 @@ type = ["pytest-mypy (>=1.0.1) ; platform_python_implementation != \"PyPy\""]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.14"
-content-hash = "e2769f609c3b26e8218739cdf9e66a37bc4f23768013832bf718b2ebf810050d"
+content-hash = "1efaf658ccadb0e72a93bc08a9b463c163676379d5595c0a57e6dd405ce30725"

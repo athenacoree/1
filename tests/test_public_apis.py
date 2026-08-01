@@ -1,4 +1,5 @@
 import unittest
+from unittest import mock
 from vcdiligence.public_apis import (
     search_sec_edgar,
     search_opencorporates,
@@ -10,7 +11,6 @@ from vcdiligence.public_apis import (
 
 class TestPublicAPIs(unittest.TestCase):
     def test_sec_edgar_stripe(self):
-        # Let's search a well-known name
         res = search_sec_edgar("Stripe")
         self.assertIn("status", res)
         self.assertIsNotNone(res["status"])
@@ -38,6 +38,28 @@ class TestPublicAPIs(unittest.TestCase):
         self.assertIn("uspto", insights)
         self.assertIn("courtlistener", insights)
         self.assertIn("github", insights)
+
+    @mock.patch("vcdiligence.public_apis.query_github_repo")
+    @mock.patch("vcdiligence.public_apis.search_sec_edgar")
+    @mock.patch("vcdiligence.public_apis.search_opencorporates")
+    @mock.patch("vcdiligence.public_apis.search_uspto")
+    @mock.patch("vcdiligence.public_apis.search_courtlistener")
+    def test_get_all_public_insights_filtering(self, mock_cl, mock_uspto, mock_oc, mock_sec, mock_github):
+        mock_github.return_value = {"status": "found"}
+        mock_sec.return_value = {"status": "found"}
+
+        # Call get_all_public_insights with sources=['github']
+        insights = get_all_public_insights("Stripe", sources=["github"])
+
+        # Only github should be called
+        mock_github.assert_called_once_with("Stripe", force_refresh=False)
+        mock_sec.assert_not_called()
+        mock_oc.assert_not_called()
+        mock_uspto.assert_not_called()
+        mock_cl.assert_not_called()
+
+        self.assertIn("github", insights)
+        self.assertNotIn("sec_edgar", insights)
 
 if __name__ == "__main__":
     unittest.main()
