@@ -24,6 +24,7 @@ dependencies = [
     "python-pptx (>=1.0.2,<2.0.0)",
     "pypdf",
     "python-whois (>=0.9.6,<0.10.0)",
+    "stripe (>=15.4.0,<16.0.0)",
 ]
 
 [project.scripts]

@@ -21,7 +21,7 @@ class TestValidatorSSRF(unittest.TestCase):
     def test_public_url_allowed(self):
         allowed_urls = [
             "https://stripe.com",
-            "http://google.com"
+            "https://github.com"
         ]
         for url in allowed_urls:
             try:
