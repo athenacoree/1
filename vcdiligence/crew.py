@@ -7,7 +7,7 @@ from vcdiligence.llm_manager import LLMProviderManager
 
 @CrewBase
 class MarketResearchCrew():
-    def __init__(self, task_callback=None):
+    def __init__(self, task_callback=None, user_priorities=None, custom_focus_keywords=None):
         base_path = os.path.dirname(__file__)
         agents_yaml_path = os.path.join(base_path, "config", "agents.yaml")
         tasks_yaml_path = os.path.join(base_path, "config", "tasks.yaml")
@@ -19,6 +19,28 @@ class MarketResearchCrew():
 
         self.llm, self.provider_name = LLMProviderManager.get_llm()
         self.task_callback = task_callback
+
+        # Generate dynamic user priorities instruction block
+        block_lines = []
+        if user_priorities:
+            priority_labels = {
+                "legal_risk": "Riesgo legal y regulaciones",
+                "product_traction": "Tracción de producto y métricas",
+                "founding_team": "Experiencia del equipo fundador",
+                "competition": "Análisis competitivo y competidores",
+                "financials": "Métricas financieras y viabilidad de precios"
+            }
+            readable_priorities = [priority_labels.get(p, p) for p in user_priorities if (p in priority_labels or p)]
+            if readable_priorities:
+                block_lines.append(f"Este análisis debe dar énfasis especial a: {', '.join(readable_priorities)}.")
+
+        if custom_focus_keywords:
+            block_lines.append(f"Presta atención adicional a las siguientes palabras clave o temas de interés específicos del usuario: {custom_focus_keywords}.")
+
+        if block_lines:
+            self.user_priorities_block = "INSTRUCCIONES DE PRIORIDAD DEL USUARIO: " + " ".join(block_lines)
+        else:
+            self.user_priorities_block = ""
 
     @agent
     def market_research_specialist(self) -> Agent:

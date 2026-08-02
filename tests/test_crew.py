@@ -25,5 +25,20 @@ class TestCrewConfig(unittest.TestCase):
         except Exception as e:
             self.fail(f"Crew initialization failed: {str(e)}")
 
+    @mock.patch("vcdiligence.llm_manager.LLMProviderManager.get_llm")
+    def test_crew_priorities_block(self, mock_get_llm):
+        mock_get_llm.return_value = (LLM(model="openai/gpt-4o-mini", api_key="dummy"), "openai")
+
+        # Test with priorities and custom keywords
+        crew_obj = MarketResearchCrew(
+            user_priorities=["legal_risk", "product_traction"],
+            custom_focus_keywords="GDPR compliance"
+        )
+
+        self.assertIn("Riesgo legal y regulaciones", crew_obj.user_priorities_block)
+        self.assertIn("Tracción de producto y métricas", crew_obj.user_priorities_block)
+        self.assertIn("GDPR compliance", crew_obj.user_priorities_block)
+        self.assertTrue(crew_obj.user_priorities_block.startswith("INSTRUCCIONES DE PRIORIDAD DEL USUARIO:"))
+
 if __name__ == "__main__":
     unittest.main()

@@ -50,6 +50,9 @@
     showSettings: false,
     settingsName: '',
     settingsLogoFile: null,
+    settingsEnabledSources: [],
+    settingsAnalysisPriorities: [],
+    settingsCustomFocusKeywords: '',
     benchmarks: [],
     showBenchmark: false,
     userDecision: '',
@@ -290,6 +293,9 @@
             this.profileCompanyName = this.user.company_name || '';
             this.profileCompanyWebsite = this.user.company_website || '';
             this.settingsName = this.user.organization ? this.user.organization.company_name : 'DealScout Capital';
+            this.settingsEnabledSources = this.user.enabled_sources || [];
+            this.settingsAnalysisPriorities = this.user.analysis_priorities || [];
+            this.settingsCustomFocusKeywords = this.user.custom_focus_keywords || '';
         } catch (err) {
             console.error('Failed to load profile', err);
         }
@@ -312,6 +318,9 @@
         if (this.settingsLogoFile) {
             formData.append('logo', this.settingsLogoFile);
         }
+        formData.append('enabled_sources', JSON.stringify(this.settingsEnabledSources));
+        formData.append('analysis_priorities', JSON.stringify(this.settingsAnalysisPriorities));
+        formData.append('custom_focus_keywords', this.settingsCustomFocusKeywords);
         try {
             const res = await fetch('/settings', {
                 method: 'POST',
@@ -1829,25 +1838,95 @@
 
     <!-- Settings Modal -->
     <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4" x-show="showSettings" style="display: none;">
-        <div class="glass p-8 rounded-3xl max-w-md w-full text-left">
-            <h3 class="text-xl font-bold mb-4 text-white">White-Label Customization</h3>
+        <div class="glass p-8 rounded-3xl max-w-xl w-full text-left max-h-[90vh] overflow-y-auto">
+            <h3 class="text-xl font-bold mb-4 text-white">Configuración y Personalización</h3>
 
             <div class="space-y-4">
-                <div>
-                    <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Organization Name</label>
-                    <input type="text" x-model="settingsName" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm outline-none focus:border-cyan-500">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Custom Logo (Upload PNG/JPG)</label>
-                    <input type="file" @change="settingsLogoFile = $event.target.files[0]" class="w-full text-sm text-slate-400">
+                <template x-if="user && user.role === 'administrador'">
+                    <div class="space-y-4 border-b border-slate-800/60 pb-4">
+                        <h4 class="text-sm font-semibold text-cyan-400 uppercase tracking-wider mb-2">Marca Blanca (Admin)</h4>
+                        <div>
+                            <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Organization Name</label>
+                            <input type="text" x-model="settingsName" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm outline-none focus:border-cyan-500 text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Custom Logo (Upload PNG/JPG)</label>
+                            <input type="file" @change="settingsLogoFile = $event.target.files[0]" class="w-full text-sm text-slate-400">
+                        </div>
+                    </div>
+                </template>
+
+                <div class="space-y-4 pt-2">
+                    <h4 class="text-sm font-semibold text-emerald-400 uppercase tracking-wider">Preferencias de Análisis (Personal)</h4>
+
+                    <!-- Panel de Fuentes de Datos (Checkboxes) -->
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-slate-400 mb-2">Fuentes de Datos Preferidas</label>
+                        <div class="space-y-2 bg-slate-900/50 p-3 rounded-xl border border-slate-800 text-xs">
+                            <label class="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
+                                <input type="checkbox" value="sec_edgar" x-model="settingsEnabledSources" class="rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-500">
+                                <span>SEC EDGAR — Registros públicos de la SEC (EE. UU.)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
+                                <input type="checkbox" value="opencorporates" x-model="settingsEnabledSources" class="rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-500">
+                                <span>OpenCorporates — Verificación de registro corporativo global</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
+                                <input type="checkbox" value="uspto" x-model="settingsEnabledSources" class="rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-500">
+                                <span>USPTO — Búsqueda de marcas y patentes registradas</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
+                                <input type="checkbox" value="courtlistener" x-model="settingsEnabledSources" class="rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-500">
+                                <span>CourtListener — Historial de litigios y demandas federales</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
+                                <input type="checkbox" value="github" x-model="settingsEnabledSources" class="rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-500">
+                                <span>GitHub API — Análisis de repositorios de código abierto</span>
+                            </label>
+                        </div>
+                        <span class="text-[10px] text-slate-500 mt-1 block">Por defecto vacío: comportamiento automático e inteligente del orquestador.</span>
+                    </div>
+
+                    <!-- Panel de Prioridades de Análisis (Checkboxes) -->
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-slate-400 mb-2">Tesis / Prioridades de Análisis</label>
+                        <div class="space-y-2 bg-slate-900/50 p-3 rounded-xl border border-slate-800 text-xs">
+                            <label class="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
+                                <input type="checkbox" value="legal_risk" x-model="settingsAnalysisPriorities" class="rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-500">
+                                <span>Riesgo legal y regulatorios (legal_risk)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
+                                <input type="checkbox" value="product_traction" x-model="settingsAnalysisPriorities" class="rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-500">
+                                <span>Tracción de producto y métricas (product_traction)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
+                                <input type="checkbox" value="founding_team" x-model="settingsAnalysisPriorities" class="rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-500">
+                                <span>Experiencia del equipo fundador (founding_team)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
+                                <input type="checkbox" value="competition" x-model="settingsAnalysisPriorities" class="rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-500">
+                                <span>Análisis competitivo y competidores (competition)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
+                                <input type="checkbox" value="financials" x-model="settingsAnalysisPriorities" class="rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-500">
+                                <span>Métricas financieras y viabilidad de precios (financials)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Palabras clave personalizadas (Text input) -->
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Palabras Clave de Enfoque Personalizado</label>
+                        <input type="text" x-model="settingsCustomFocusKeywords" placeholder="Ej: cumplimiento GDPR, stack de IA, fintech mexicana" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm outline-none focus:border-cyan-500 text-white">
+                    </div>
                 </div>
 
                 <div class="flex gap-2 pt-4">
                     <button @click="saveSettings()" class="flex-grow py-3 bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold rounded-xl text-sm">
-                        Save Customizations
+                        Guardar Configuración
                     </button>
                     <button @click="showSettings = false" class="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-sm">
-                        Cancel
+                        Cancelar
                     </button>
                 </div>
             </div>

@@ -7,7 +7,7 @@ import requests
 
 from vcdiligence.database import SessionLocal, Report, ReportChange, Task
 from vcdiligence.logging_config import logger
-from vcdiligence.public_apis import get_all_public_insights, PUBLIC_CACHE_DIR
+from vcdiligence.public_apis import get_all_public_insights, PUBLIC_CACHE_DIR, refresh_ofac_local_list
 from vcdiligence.scraper import SmartScraper
 from vcdiligence.crew import MarketResearchCrew
 from vcdiligence.parser import parse_report_meta, merge_devils_advocate

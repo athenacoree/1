@@ -5,6 +5,7 @@ from vcdiligence.logging_config import logger
 from vcdiligence.scraper import SmartScraper
 from vcdiligence.parser import parse_report_meta, merge_devils_advocate
 from vcdiligence.public_apis import get_all_public_insights
+from vcdiligence.source_orchestrator import run_orchestrated_analysis
 from vcdiligence.pdf_generator import generate_report_pdf
 from vcdiligence.crew import MarketResearchCrew
 from vcdiligence.security import create_access_token
@@ -90,7 +91,10 @@ def run_due_diligence_task(
     user_id: int,
     user_email: str,
     extra_context: dict = None,
-    notify_email: str = None
+    notify_email: str = None,
+    user_enabled_sources: list = None,
+    user_priorities: list = None,
+    custom_focus_keywords: str = None
 ):
     """
     Runs the multi-agent crew as a background task, updating DB Task rows.
@@ -105,13 +109,7 @@ def run_due_diligence_task(
             task.message = "Scraping startup web presence & checking public records..."
             db.commit()
 
-        # Gather public API insights
-        company_name = domain.split('.')[0].capitalize()
-        logger.info(f"Running Public API queries for {company_name}")
-        public_insights = get_all_public_insights(company_name)
-        public_insights_text = json.dumps(public_insights, indent=2)
-
-        # Scrape company landing and internal pages
+        # Scrape company landing and internal pages first (needed for heuristics)
         payload = SmartScraper.analyze_startup(url)
 
         internal_pages_text = ""
@@ -119,6 +117,20 @@ def run_due_diligence_task(
             internal_pages_text += f"\n--- Page: {path} ---\n{content}\n"
         if not internal_pages_text:
             internal_pages_text = "No internal pages found."
+
+        scraped_text = payload.get("homepage_summary", "") + "\n" + internal_pages_text
+
+        # Gather public API insights via orchestrator
+        company_name = domain.split('.')[0].capitalize()
+        logger.info(f"Running Orchestrated Public API queries for {company_name}")
+        public_insights = run_orchestrated_analysis(
+            company_name=company_name,
+            domain=domain,
+            scraped_text=scraped_text,
+            user_enabled_sources=user_enabled_sources,
+            force_refresh=False
+        )
+        public_insights_text = json.dumps(public_insights, indent=2)
 
         competitors = json.dumps(payload.get("search_insights", {}).get("competitors", []), indent=2)
         pricing_product = json.dumps(payload.get("search_insights", {}).get("pricing_and_product", []), indent=2)
@@ -156,7 +168,11 @@ def run_due_diligence_task(
             finally:
                 db_cb.close()
 
-        crew_obj = MarketResearchCrew(task_callback=task_callback)
+        crew_obj = MarketResearchCrew(
+            task_callback=task_callback,
+            user_priorities=user_priorities,
+            custom_focus_keywords=custom_focus_keywords
+        )
         inputs = {
             "company_name": payload.get("company_name", company_name),
             "company_url": payload.get("company_url", url),
@@ -166,7 +182,8 @@ def run_due_diligence_task(
             "pricing_and_product_insights": pricing_product[:2500],
             "market_and_funding_insights": market_funding[:2500],
             "team_and_founders_insights": team_founders[:2500],
-            "public_api_insights": public_insights_text[:3500]
+            "public_api_insights": public_insights_text[:3500],
+            "user_priorities_block": crew_obj.user_priorities_block
         }
 
         # Run CrewAI kickoff
@@ -204,7 +221,8 @@ def run_due_diligence_task(
             "score": score,
             "recommendation": recommendation,
             "sub_scores": sub_scores,
-            "report_md": markdown_report
+            "report_md": markdown_report,
+            "triggered_conditional_sources": public_insights.get("triggered_conditional_sources", [])
         }
 
         # Generate white-labeled PDF report

@@ -158,7 +158,17 @@ def generate_report_pdf(
         ('SPAN', (1,2), (3,2)),
     ]))
     story.append(summary_table)
-    story.append(Spacer(1, 20))
+    story.append(Spacer(1, 15))
+
+    # 2b. Triggered Conditional Sources (for transparency)
+    triggered_sources = report_data.get("triggered_conditional_sources", [])
+    if triggered_sources:
+        story.append(Paragraph("Fuentes Condicionales Activadas Dinámicamente", h1_style))
+        for ts in triggered_sources:
+            src = ts.get("source", "Desconocida")
+            reason = ts.get("reason", "Por heurística automática")
+            story.append(Paragraph(f"<b>&bull; {src.upper()}:</b> {reason}", body_style))
+        story.append(Spacer(1, 15))
 
     # 3. Report Body (Parse the Markdown and add paragraphs/headings)
     report_md = report_data.get("report_md", "")
