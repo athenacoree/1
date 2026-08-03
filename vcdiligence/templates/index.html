@@ -74,6 +74,19 @@
     optInShowNumericalScore: false,
     adminListings: [],
 
+    // Payments & Keys State
+    adminApiKeys: [],
+    newApiKeyProvider: 'openrouter',
+    newApiKeyValue: '',
+    adminPricingPlans: [],
+    newPlanType: 'per_analysis',
+    newPlanName: '',
+    newPlanPriceCents: 1000,
+    newPlanCreditsIncluded: 1,
+    newPlanIsActive: true,
+    newPlanAllowedProviders: ['stripe', 'crypto'],
+    userPricingPlans: [],
+
     // Auth & Register inputs
     isRegistering: false,
     authEmail: '',
@@ -441,8 +454,203 @@
             this.adminErrorReports = await eRes.json();
 
             await this.loadAdminListings();
+            await this.loadAdminApiKeys();
+            await this.loadAdminPricingPlans();
         } catch (err) {
             console.error('Failed to load admin data', err);
+        }
+    },
+
+    async loadAdminApiKeys() {
+        try {
+            const headers = { 'Authorization': 'Bearer ' + this.token };
+            const res = await fetch('/admin/api-keys', { headers });
+            this.adminApiKeys = await res.json();
+        } catch (err) {
+            console.error('Failed to load admin API keys', err);
+        }
+    },
+
+    async addApiKey() {
+        try {
+            const headers = {
+                'Authorization': 'Bearer ' + this.token,
+                'Content-Type': 'application/json'
+            };
+            const payload = {
+                provider: this.newApiKeyProvider,
+                api_key: this.newApiKeyValue
+            };
+            const res = await fetch('/admin/api-keys', {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(payload)
+            });
+            if (res.status === 200) {
+                alert('API Key agregada al pool con éxito!');
+                this.newApiKeyValue = '';
+                await this.loadAdminApiKeys();
+            } else {
+                const data = await res.json();
+                alert('Error: ' + data.detail);
+            }
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    async deleteApiKey(id) {
+        try {
+            const res = await fetch(`/admin/api-keys/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            if (res.status === 200) {
+                alert('API Key eliminada!');
+                await this.loadAdminApiKeys();
+            }
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    async toggleApiKey(id) {
+        try {
+            const res = await fetch(`/admin/api-keys/${id}/toggle`, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            if (res.status === 200) {
+                alert('Estado de API Key cambiado!');
+                await this.loadAdminApiKeys();
+            }
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    async loadAdminPricingPlans() {
+        try {
+            const headers = { 'Authorization': 'Bearer ' + this.token };
+            const res = await fetch('/admin/pricing-plans', { headers });
+            this.adminPricingPlans = await res.json();
+        } catch (err) {
+            console.error('Failed to load admin pricing plans', err);
+        }
+    },
+
+    async addPricingPlan() {
+        try {
+            const headers = {
+                'Authorization': 'Bearer ' + this.token,
+                'Content-Type': 'application/json'
+            };
+            const payload = {
+                plan_type: this.newPlanType,
+                name: this.newPlanName,
+                price_cents: parseInt(this.newPlanPriceCents),
+                credits_included: this.newPlanType === 'credit_bundle' ? parseInt(this.newPlanCreditsIncluded) : null,
+                is_active: this.newPlanIsActive,
+                allowed_providers: this.newPlanAllowedProviders
+            };
+            const res = await fetch('/admin/pricing-plans', {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(payload)
+            });
+            if (res.status === 200) {
+                alert('Plan de precios configurado!');
+                this.newPlanName = '';
+                this.newPlanPriceCents = 1000;
+                this.newPlanCreditsIncluded = 1;
+                await this.loadAdminPricingPlans();
+                await this.loadPublicPlans();
+            } else {
+                const data = await res.json();
+                alert('Error: ' + data.detail);
+            }
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    async deletePricingPlan(id) {
+        try {
+            const res = await fetch(`/admin/pricing-plans/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            if (res.status === 200) {
+                alert('Plan de precios eliminado!');
+                await this.loadAdminPricingPlans();
+                await this.loadPublicPlans();
+            }
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    async togglePayments(enabled) {
+        try {
+            const headers = {
+                'Authorization': 'Bearer ' + this.token,
+                'Content-Type': 'application/json'
+            };
+            const res = await fetch('/admin/settings/payments-toggle', {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({ enabled: enabled })
+            });
+            if (res.status === 200) {
+                alert('Sistema de pagos ' + (enabled ? 'activado' : 'desactivado') + '!');
+                await this.loadPublicPlans();
+            }
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    async loadPublicPlans() {
+        try {
+            const res = await fetch('/pricing-plans');
+            this.userPricingPlans = await res.json();
+        } catch (err) {
+            console.error('Failed to load public pricing plans', err);
+        }
+    },
+
+    async buyPlan(planId, provider) {
+        try {
+            const headers = {
+                'Authorization': 'Bearer ' + this.token,
+                'Content-Type': 'application/json'
+            };
+            const res = await fetch(`/checkout/${planId}`, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({ provider: provider })
+            });
+            const data = await res.json();
+            if (res.status === 200 && data.checkout_url) {
+                // If it is a mock checkout URL, let's allow simulated self-completion for testing
+                if (data.checkout_url.includes('mock_checkout_id=')) {
+                    const mock_id = data.checkout_url.split('mock_checkout_id=')[1].split('&')[0];
+                    if (confirm('Estás en Modo Test. ¿Deseas simular el pago exitoso de esta transacción #' + mock_id + '?')) {
+                        const completeRes = await fetch(`/checkout/test-complete/${mock_id}`, { method: 'POST' });
+                        if (completeRes.status === 200) {
+                            alert('Pago de test simulado con éxito! Se han acreditado los beneficios.');
+                            await this.loadUserProfile();
+                            return;
+                        }
+                    }
+                }
+                // Redirect user to the hosted checkout page
+                window.location.href = data.checkout_url;
+            } else {
+                alert('Error al iniciar checkout: ' + (data.detail || 'intente de nuevo'));
+            }
+        } catch (err) {
+            alert(err.message);
         }
     },
 
@@ -914,6 +1122,16 @@
                             <span class="ml-1.5 text-[9px] bg-cyan-500/20 text-cyan-400 px-1 rounded">Empresa VIP</span>
                         </template>
                     </span>
+                    <template x-if="user && user.wallet">
+                        <span class="text-[11px] sm:text-xs bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-full flex items-center gap-1.5 text-slate-300">
+                            <template x-if="user.wallet.subscription_active">
+                                <span class="text-emerald-400 font-bold">VIP Activo ✨</span>
+                            </template>
+                            <template x-if="!user.wallet.subscription_active">
+                                <span>Créditos: <strong class="text-cyan-400" x-text="user.wallet.credits_balance"></strong></span>
+                            </template>
+                        </span>
+                    </template>
                     <template x-if="user && user.role === 'administrador'">
                         <button @click="await loadBenchmarks(); showBenchmark = true" class="text-[11px] sm:text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg font-semibold text-emerald-400 border border-emerald-400/20">
                             Benchmarks
@@ -1310,6 +1528,31 @@
                                 </template>
                             </div>
                         </div>
+
+                        <!-- User Pricing Plans / Wallet Balance -->
+                        <template x-if="userPricingPlans && userPricingPlans.length > 0">
+                            <div class="glass p-6 rounded-2xl">
+                                <h3 class="text-sm font-bold text-emerald-400 uppercase tracking-widest mb-4">Planes y Créditos Disponibles</h3>
+                                <div class="space-y-4">
+                                    <template x-for="plan in userPricingPlans" :key="plan.id">
+                                        <div class="p-4 rounded-xl bg-slate-950/40 border border-slate-900 flex flex-col justify-between gap-3">
+                                            <div class="flex justify-between items-start">
+                                                <div>
+                                                    <h4 class="font-bold text-sm text-white" x-text="plan.name"></h4>
+                                                    <p class="text-[10px] text-slate-500 capitalize" x-text="plan.plan_type.replace('_', ' ')"></p>
+                                                </div>
+                                                <span class="text-sm font-bold text-emerald-400" x-text="'$' + (plan.price_cents / 100).toFixed(2)"></span>
+                                            </div>
+                                            <div class="flex gap-2">
+                                                <template x-for="prov in plan.allowed_providers">
+                                                    <button @click="buyPlan(plan.id, prov)" class="flex-1 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px] font-bold text-slate-200 hover:border-cyan-500 transition-all capitalize" x-text="'Comprar con ' + prov"></button>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
                     </div>
 
                     <!-- Right Main Content Area -->
@@ -1825,6 +2068,167 @@
                                             </template>
                                         </td>
                                         <td class="py-2.5 px-3" x-text="r.created_at.split('T')[0]"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Section A: Pool de API Keys (Rotation) -->
+                <div class="p-6 bg-slate-900/40 border border-slate-800 rounded-2xl">
+                    <h4 class="text-sm font-bold text-cyan-400 uppercase tracking-wider mb-3">Pool de API Keys para Rotación</h4>
+
+                    <!-- Add Key Form -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6 bg-slate-900/60 p-4 rounded-xl border border-slate-800/80">
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Proveedor</label>
+                            <select x-model="newApiKeyProvider" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-300 outline-none text-xs">
+                                <option value="openrouter">OpenRouter</option>
+                                <option value="grok">Grok</option>
+                                <option value="openai">OpenAI</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">API Key</label>
+                            <input type="text" x-model="newApiKeyValue" placeholder="Coloca tu api key" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-300 outline-none text-xs">
+                        </div>
+                        <div class="flex items-end">
+                            <button @click="addApiKey()" class="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg transition text-xs">Agregar Key al Pool</button>
+                        </div>
+                    </div>
+
+                    <!-- Keys Table -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b border-slate-800 text-slate-400">
+                                    <th class="py-2 px-3">ID</th>
+                                    <th class="py-2 px-3">Proveedor</th>
+                                    <th class="py-2 px-3">Key (Enmascarada)</th>
+                                    <th class="py-2 px-3">Fallos Consecutivos</th>
+                                    <th class="py-2 px-3">Estado</th>
+                                    <th class="py-2 px-3">Activo</th>
+                                    <th class="py-2 px-3">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="k in adminApiKeys" :key="k.id">
+                                    <tr class="border-b border-slate-800/40 hover:bg-slate-800/20">
+                                        <td class="py-2.5 px-3" x-text="k.id"></td>
+                                        <td class="py-2.5 px-3 uppercase font-bold text-slate-300" x-text="k.provider"></td>
+                                        <td class="py-2.5 px-3 font-mono text-slate-400" x-text="k.api_key"></td>
+                                        <td class="py-2.5 px-3 text-center text-slate-300" x-text="k.consecutive_failures"></td>
+                                        <td class="py-2.5 px-3">
+                                            <span class="px-1.5 py-0.5 rounded text-[10px] uppercase font-bold" :class="{
+                                                'bg-emerald-500/20 text-emerald-400': k.status === 'healthy',
+                                                'bg-red-500/20 text-red-400': k.status === 'exhausted',
+                                                'bg-slate-800 text-slate-400': k.status === 'disabled',
+                                            }" x-text="k.status"></span>
+                                        </td>
+                                        <td class="py-2.5 px-3">
+                                            <span class="px-1.5 py-0.5 rounded text-[10px]" :class="k.is_active ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'" x-text="k.is_active ? 'Sí' : 'No'"></span>
+                                        </td>
+                                        <td class="py-2.5 px-3 space-x-1">
+                                            <button @click="toggleApiKey(k.id)" class="px-2 py-1 bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300 rounded text-[10px]" x-text="k.is_active ? 'Desactivar' : 'Activar'"></button>
+                                            <button @click="deleteApiKey(k.id)" class="px-2 py-1 bg-red-950 hover:bg-red-900 border border-red-800 text-red-400 rounded text-[10px]">Eliminar</button>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Section B: Configuración de Pagos -->
+                <div class="p-6 bg-slate-900/40 border border-slate-800 rounded-2xl">
+                    <h4 class="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-3">Sistema de Pagos Configurable</h4>
+
+                    <!-- Global payments toggle -->
+                    <div class="flex items-center gap-2 mb-6 bg-slate-900/60 p-4 rounded-xl border border-slate-800/80">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" @change="togglePayments($event.target.checked)" class="rounded bg-slate-950 border-slate-800 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-905">
+                            <span class="text-sm font-bold text-slate-200">Activar Pasarela de Pagos (Global Master Switch)</span>
+                        </label>
+                    </div>
+
+                    <!-- Add pricing plan form -->
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800/80 mb-6">
+                        <h5 class="text-xs font-bold text-slate-300 mb-3 uppercase tracking-wide">Crear Nuevo Plan de Precios</h5>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Nombre del Plan</label>
+                                <input type="text" x-model="newPlanName" placeholder="Plan Premium, Bundle de Créditos, etc." class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-300 outline-none text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Tipo de Cobro</label>
+                                <select x-model="newPlanType" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-300 outline-none text-xs">
+                                    <option value="per_analysis">Pago Único (Por Análisis)</option>
+                                    <option value="credit_bundle">Paquete de Créditos</option>
+                                    <option value="subscription_monthly">Suscripción Mensual</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Precio (En centavos de USD, ej: 1000 = $10.00)</label>
+                                <input type="number" x-model="newPlanPriceCents" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-300 outline-none text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Créditos Incluidos (bundles únicamente)</label>
+                                <input type="number" x-model="newPlanCreditsIncluded" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-300 outline-none text-xs">
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-6 mb-4">
+                            <label class="flex items-center gap-2 cursor-pointer text-xs">
+                                <input type="checkbox" x-model="newPlanIsActive" class="rounded bg-slate-950 border-slate-800 text-emerald-500 focus:ring-emerald-500">
+                                <span class="text-slate-300">Plan Activo y Visible para Compra</span>
+                            </label>
+                            <div class="flex items-center gap-3">
+                                <span class="text-[10px] font-bold uppercase text-slate-400">Proveedores Permitidos:</span>
+                                <label class="flex items-center gap-1.5 cursor-pointer text-xs">
+                                    <input type="checkbox" value="stripe" x-model="newPlanAllowedProviders" class="rounded bg-slate-950 border-slate-800 text-emerald-500">
+                                    <span class="text-slate-300">Stripe</span>
+                                </label>
+                                <label class="flex items-center gap-1.5 cursor-pointer text-xs">
+                                    <input type="checkbox" value="crypto" x-model="newPlanAllowedProviders" class="rounded bg-slate-950 border-slate-800 text-emerald-500">
+                                    <span class="text-slate-300">Crypto (Coinbase/NOWPayments)</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div>
+                            <button @click="addPricingPlan()" class="py-2 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg transition text-xs">Guardar Plan de Precios</button>
+                        </div>
+                    </div>
+
+                    <!-- Plans Table -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b border-slate-800 text-slate-400">
+                                    <th class="py-2 px-3">ID</th>
+                                    <th class="py-2 px-3">Nombre</th>
+                                    <th class="py-2 px-3">Tipo</th>
+                                    <th class="py-2 px-3">Precio</th>
+                                    <th class="py-2 px-3">Créditos</th>
+                                    <th class="py-2 px-3">Pasarelas</th>
+                                    <th class="py-2 px-3">Activo</th>
+                                    <th class="py-2 px-3">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="p in adminPricingPlans" :key="p.id">
+                                    <tr class="border-b border-slate-800/40 hover:bg-slate-800/20">
+                                        <td class="py-2.5 px-3" x-text="p.id"></td>
+                                        <td class="py-2.5 px-3 font-bold text-slate-300" x-text="p.name"></td>
+                                        <td class="py-2.5 px-3" x-text="p.plan_type"></td>
+                                        <td class="py-2.5 px-3 text-emerald-400 font-bold" x-text="'$' + (p.price_cents / 100).toFixed(2) + ' ' + p.currency"></td>
+                                        <td class="py-2.5 px-3" x-text="p.credits_included || 'N/A'"></td>
+                                        <td class="py-2.5 px-3 uppercase text-slate-400 font-bold" x-text="p.allowed_providers.join(', ')"></td>
+                                        <td class="py-2.5 px-3">
+                                            <span class="px-1.5 py-0.5 rounded text-[10px]" :class="p.is_active ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'" x-text="p.is_active ? 'Sí' : 'No'"></span>
+                                        </td>
+                                        <td class="py-2.5 px-3">
+                                            <button @click="deletePricingPlan(p.id)" class="px-2 py-1 bg-red-950 hover:bg-red-900 border border-red-800 text-red-400 rounded text-[10px]">Eliminar</button>
+                                        </td>
                                     </tr>
                                 </template>
                             </tbody>

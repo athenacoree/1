@@ -7,7 +7,7 @@ from vcdiligence.parser import parse_report_meta, merge_devils_advocate
 from vcdiligence.public_apis import get_all_public_insights
 from vcdiligence.source_orchestrator import run_orchestrated_analysis
 from vcdiligence.pdf_generator import generate_report_pdf
-from vcdiligence.crew import MarketResearchCrew
+from vcdiligence.crew import MarketResearchCrew, run_crew_with_rotation
 from vcdiligence.security import create_access_token
 from vcdiligence.monitoring import send_report_ready_email
 
@@ -168,11 +168,6 @@ def run_due_diligence_task(
             finally:
                 db_cb.close()
 
-        crew_obj = MarketResearchCrew(
-            task_callback=task_callback,
-            user_priorities=user_priorities,
-            custom_focus_keywords=custom_focus_keywords
-        )
         inputs = {
             "company_name": payload.get("company_name", company_name),
             "company_url": payload.get("company_url", url),
@@ -182,12 +177,17 @@ def run_due_diligence_task(
             "pricing_and_product_insights": pricing_product[:2500],
             "market_and_funding_insights": market_funding[:2500],
             "team_and_founders_insights": team_founders[:2500],
-            "public_api_insights": public_insights_text[:3500],
-            "user_priorities_block": crew_obj.user_priorities_block
+            "public_api_insights": public_insights_text[:3500]
         }
 
-        # Run CrewAI kickoff
-        result_output = crew_obj.crew().kickoff(inputs=inputs)
+        # Run CrewAI kickoff with automatic rotation
+        result_output, provider_name = run_crew_with_rotation(
+            inputs=inputs,
+            task_callback=task_callback,
+            user_priorities=user_priorities,
+            custom_focus_keywords=custom_focus_keywords,
+            db_session=db
+        )
 
         # Merge business analyst memo and devils advocate section
         try:
@@ -244,7 +244,7 @@ def run_due_diligence_task(
                 recommendation=recommendation,
                 report_md=markdown_report,
                 pdf_path=pdf_path,
-                llm_provider=crew_obj.provider_name,
+                llm_provider=provider_name,
                 organization_id=org_id
             )
             db.add(report)
@@ -254,7 +254,7 @@ def run_due_diligence_task(
             report.recommendation = recommendation
             report.report_md = markdown_report
             report.pdf_path = pdf_path
-            report.llm_provider = crew_obj.provider_name
+            report.llm_provider = provider_name
         db.commit()
 
         # Update Task to completed
@@ -266,7 +266,7 @@ def run_due_diligence_task(
             "recommendation": recommendation,
             "sub_scores": sub_scores,
             "report_md": markdown_report,
-            "llm_provider": crew_obj.provider_name,
+            "llm_provider": provider_name,
             "pdf_path": f"/reports/{domain}/pdf"
         }
 

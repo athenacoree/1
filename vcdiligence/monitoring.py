@@ -9,7 +9,7 @@ from vcdiligence.database import SessionLocal, Report, ReportChange, Task
 from vcdiligence.logging_config import logger
 from vcdiligence.public_apis import get_all_public_insights, PUBLIC_CACHE_DIR, refresh_ofac_local_list
 from vcdiligence.scraper import SmartScraper
-from vcdiligence.crew import MarketResearchCrew
+from vcdiligence.crew import MarketResearchCrew, run_crew_with_rotation
 from vcdiligence.parser import parse_report_meta, merge_devils_advocate
 
 def get_old_cached_insight(api_name: str, company_name: str) -> dict:
@@ -188,7 +188,6 @@ def run_continuous_monitoring_job():
                     finally:
                         db_cb.close()
 
-                crew_obj = MarketResearchCrew(task_callback=monitor_task_callback)
                 inputs = {
                     "company_name": payload.get("company_name", company_name),
                     "company_url": payload.get("company_url", r.url),
@@ -201,7 +200,12 @@ def run_continuous_monitoring_job():
                     "public_api_insights": json.dumps(new_sec, indent=2)[:3500]
                 }
 
-                result_output = crew_obj.crew().kickoff(inputs=inputs)
+                # Run CrewAI kickoff with automatic rotation
+                result_output, provider_name = run_crew_with_rotation(
+                    inputs=inputs,
+                    task_callback=monitor_task_callback,
+                    db_session=db
+                )
 
                 # Merge business analyst memo and devils advocate section
                 try:
@@ -250,7 +254,7 @@ def run_continuous_monitoring_job():
                         "recommendation": new_reco,
                         "sub_scores": sub_scores,
                         "report_md": markdown_report,
-                        "llm_provider": crew_obj.provider_name,
+                        "llm_provider": provider_name,
                         "pdf_path": f"/reports/{r.domain}/pdf"
                     }
                     db.commit()
@@ -335,6 +339,27 @@ def check_listings_expiry(db):
             logger.info(f"Expiry warning email sent to founder: {founder_email}")
         except Exception as e:
             logger.error(f"Failed to send expiry email to {founder_email}: {str(e)}")
+
+
+def recover_exhausted_api_keys():
+    """
+    Periodic job that looks for keys with status 'exhausted' and returns them to 'healthy' (resetting consecutive failures),
+    giving them the benefit of the doubt.
+    """
+    logger.info("Running scheduled API key recovery job.")
+    db = SessionLocal()
+    try:
+        from vcdiligence.database import ApiKeyPool
+        exhausted_keys = db.query(ApiKeyPool).filter_by(status="exhausted").all()
+        for k in exhausted_keys:
+            k.status = "healthy"
+            k.consecutive_failures = 0
+            logger.info(f"API Key {k.id} ({k.provider}) recovered from 'exhausted' to 'healthy'.")
+        db.commit()
+    except Exception as e:
+        logger.error(f"Error recovering exhausted API keys: {str(e)}", exc_info=True)
+    finally:
+        db.close()
 
 
 def send_report_ready_email(to_email: str, company_name: str, score: int, pdf_url: str):

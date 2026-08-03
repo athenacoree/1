@@ -5,7 +5,7 @@ import socket
 import datetime
 import threading
 from typing import Optional
-from fastapi import FastAPI, Depends, BackgroundTasks, HTTPException, status, File, UploadFile, Form
+from fastapi import FastAPI, Depends, BackgroundTasks, HTTPException, status, File, UploadFile, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -15,7 +15,8 @@ from sqlalchemy.orm import Session
 # Local imports
 from vcdiligence.database import (
     init_db, get_db, SessionLocal, User, Organization, Report, Task, AuditLog,
-    ReportChange, Decision, PrecisionBenchmark, CompanyListing, ListingInterest
+    ReportChange, Decision, PrecisionBenchmark, CompanyListing, ListingInterest,
+    ApiKeyPool, PricingPlan, UserWallet, PaymentTransaction, SystemConfig
 )
 from vcdiligence.security import hash_password, verify_password, create_access_token
 from vcdiligence.auth import get_current_user, require_admin
@@ -65,7 +66,7 @@ def on_startup():
 
         # Start APScheduler for background continuous monitoring
         from apscheduler.schedulers.background import BackgroundScheduler
-        from vcdiligence.monitoring import run_continuous_monitoring_job, refresh_ofac_local_list
+        from vcdiligence.monitoring import run_continuous_monitoring_job, refresh_ofac_local_list, recover_exhausted_api_keys
 
         scheduler = BackgroundScheduler()
         interval_hours = int(os.getenv("MONITORING_JOB_INTERVAL_HOURS", "24"))
@@ -73,6 +74,9 @@ def on_startup():
 
         # Register weekly OFAC list download job (every Sunday at midnight)
         scheduler.add_job(refresh_ofac_local_list, "cron", day_of_week="sun", hour=0, minute=0, id="ofac_weekly_refresh")
+
+        # Register 6-hourly API Key recovery job
+        scheduler.add_job(recover_exhausted_api_keys, "interval", hours=6, id="recover_api_keys")
 
         scheduler.start()
         logger.info(f"APScheduler started. Configured monitoring job to run every {interval_hours} hours, and weekly OFAC list refresh.")
@@ -85,6 +89,25 @@ import uuid
 from vcdiligence.database import Testimonial, ErrorReport
 
 # Pydantic Schemas
+class CreateApiKeyRequest(BaseModel):
+    provider: str  # "openrouter", "grok", "openai"
+    api_key: str
+
+class PaymentsToggleRequest(BaseModel):
+    enabled: bool
+
+class CreatePricingPlanRequest(BaseModel):
+    plan_type: str  # "per_analysis", "subscription_monthly", "credit_bundle"
+    name: str
+    price_cents: int
+    currency: Optional[str] = "USD"
+    credits_included: Optional[int] = None
+    is_active: Optional[bool] = False
+    allowed_providers: list = []
+
+class CheckoutRequest(BaseModel):
+    provider: str  # "stripe" or "crypto"
+
 class AnalyzeRequest(BaseModel):
     url: Optional[str] = None
     notify_email: Optional[str] = None
@@ -237,6 +260,12 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 @app.get("/me")
 def get_me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     org = db.query(Organization).filter_by(id=current_user.organization_id).first()
+    wallet = db.query(UserWallet).filter_by(user_id=current_user.id).first()
+    wallet_data = {
+        "credits_balance": wallet.credits_balance if wallet else 0,
+        "subscription_active": wallet.subscription_active if wallet else False,
+        "subscription_expires_at": wallet.subscription_expires_at.isoformat() if (wallet and wallet.subscription_expires_at) else None
+    }
     return {
         "id": current_user.id,
         "email": current_user.email,
@@ -252,6 +281,7 @@ def get_me(current_user: User = Depends(get_current_user), db: Session = Depends
         "enabled_sources": current_user.enabled_sources or [],
         "analysis_priorities": current_user.analysis_priorities or [],
         "custom_focus_keywords": current_user.custom_focus_keywords or "",
+        "wallet": wallet_data,
         "organization": {
             "id": org.id,
             "company_name": org.company_name,
@@ -715,6 +745,25 @@ def start_analysis(
             db.commit()
         return {"status": "completed", "task_id": task_id}
 
+    # Credit/Subscription validation if payments system is enabled
+    if is_payments_enabled(db):
+        wallet = db.query(UserWallet).filter_by(user_id=current_user.id).first()
+        now = datetime.datetime.utcnow()
+        has_sub = wallet and wallet.subscription_active and wallet.subscription_expires_at and wallet.subscription_expires_at > now
+        has_credit = wallet and wallet.credits_balance >= 1
+
+        if not has_sub and not has_credit:
+            raise HTTPException(
+                status_code=402,
+                detail="Créditos insuficientes. Por favor adquiere un plan o suscripción en la sección de pagos para iniciar el análisis."
+            )
+
+        if not has_sub:
+            # Deduct 1 credit
+            wallet.credits_balance -= 1
+            db.commit()
+            logger.info(f"Deducted 1 credit from user {current_user.id} for analysis of {domain}. New balance: {wallet.credits_balance}")
+
     # Check Rate Limit (e.g., maximum 10 analyses per hour per organization)
     check_rate_limit(organization_id=current_user.organization_id, db=db, limit=10, window_minutes=60)
 
@@ -968,6 +1017,25 @@ def upload_and_analyze(
             db.add(task)
             db.commit()
         return {"status": "completed", "task_id": task_id}
+
+    # Credit/Subscription validation if payments system is enabled
+    if is_payments_enabled(db):
+        wallet = db.query(UserWallet).filter_by(user_id=current_user.id).first()
+        now = datetime.datetime.utcnow()
+        has_sub = wallet and wallet.subscription_active and wallet.subscription_expires_at and wallet.subscription_expires_at > now
+        has_credit = wallet and wallet.credits_balance >= 1
+
+        if not has_sub and not has_credit:
+            raise HTTPException(
+                status_code=402,
+                detail="Créditos insuficientes. Por favor adquiere un plan o suscripción en la sección de pagos para iniciar el análisis."
+            )
+
+        if not has_sub:
+            # Deduct 1 credit
+            wallet.credits_balance -= 1
+            db.commit()
+            logger.info(f"Deducted 1 credit from user {current_user.id} for analysis of {domain}. New balance: {wallet.credits_balance}")
 
     check_rate_limit(organization_id=current_user.organization_id, db=db, limit=10, window_minutes=60)
 
@@ -1755,6 +1823,459 @@ def list_users_for_admin(current_user: User = Depends(require_admin), db: Sessio
             "created_at": u.created_at.isoformat()
         } for u in users
     ]
+
+# ----------------- ADMIN API KEY POOL ENDPOINTS -----------------
+
+@app.post("/admin/api-keys")
+def add_api_key(req: CreateApiKeyRequest, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Adds a new key to the API key rotation pool."""
+    prov = req.provider.lower().strip()
+    if prov not in ["openrouter", "grok", "openai"]:
+        raise HTTPException(status_code=400, detail="Invalid provider. Must be openrouter, grok, or openai")
+
+    new_key = ApiKeyPool(
+        provider=prov,
+        api_key=req.api_key.strip(),
+        is_active=True,
+        status="healthy",
+        consecutive_failures=0
+    )
+    db.add(new_key)
+    db.commit()
+    db.refresh(new_key)
+
+    return {
+        "status": "success",
+        "key_id": new_key.id,
+        "provider": new_key.provider,
+        "is_active": new_key.is_active,
+        "key_status": new_key.status
+    }
+
+@app.get("/admin/api-keys")
+def list_api_keys(current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Lists all keys in the pool with masked key values."""
+    keys = db.query(ApiKeyPool).order_by(ApiKeyPool.created_at.desc()).all()
+    output = []
+    for k in keys:
+        raw_val = k.api_key
+        masked_val = f"sk-...{raw_val[-4:]}" if len(raw_val) > 4 else "****"
+        output.append({
+            "id": k.id,
+            "provider": k.provider,
+            "api_key": masked_val,
+            "is_active": k.is_active,
+            "status": k.status,
+            "consecutive_failures": k.consecutive_failures,
+            "last_used_at": k.last_used_at.isoformat() if k.last_used_at else None,
+            "last_failure_reason": k.last_failure_reason,
+            "created_at": k.created_at.isoformat()
+        })
+    return output
+
+@app.delete("/admin/api-keys/{id}")
+def delete_api_key(id: int, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Deletes an API key from the pool."""
+    key = db.query(ApiKeyPool).filter_by(id=id).first()
+    if not key:
+        raise HTTPException(status_code=404, detail="API Key not found")
+    db.delete(key)
+    db.commit()
+    return {"status": "success", "message": f"API Key {id} successfully deleted"}
+
+@app.post("/admin/api-keys/{id}/toggle")
+def toggle_api_key(id: int, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Toggles active/inactive state of an API key."""
+    key = db.query(ApiKeyPool).filter_by(id=id).first()
+    if not key:
+        raise HTTPException(status_code=404, detail="API Key not found")
+    key.is_active = not key.is_active
+    db.commit()
+    db.refresh(key)
+    return {
+        "status": "success",
+        "key_id": key.id,
+        "is_active": key.is_active
+    }
+
+# ----------------- PAYMENTS SYSTEM HELPER FUNCTIONS -----------------
+
+def is_payments_enabled(db: Session) -> bool:
+    cfg = db.query(SystemConfig).filter_by(key="payments_enabled").first()
+    if cfg:
+        return cfg.value.lower() == "true"
+    return False
+
+def complete_transaction_and_apply_benefits(db: Session, transaction: PaymentTransaction):
+    if transaction.status == "completed":
+        return
+
+    transaction.status = "completed"
+    transaction.completed_at = datetime.datetime.utcnow()
+
+    # Find or create UserWallet
+    wallet = db.query(UserWallet).filter_by(user_id=transaction.user_id).first()
+    if not wallet:
+        wallet = UserWallet(user_id=transaction.user_id, credits_balance=0, subscription_active=False)
+        db.add(wallet)
+
+    plan = transaction.plan
+    if plan.plan_type == "credit_bundle":
+        wallet.credits_balance += (plan.credits_included or 0)
+        logger.info(f"Credited {plan.credits_included} credits to user {transaction.user_id}. New balance: {wallet.credits_balance}")
+    elif plan.plan_type == "subscription_monthly":
+        wallet.subscription_active = True
+        now = datetime.datetime.utcnow()
+        if wallet.subscription_expires_at and wallet.subscription_expires_at > now:
+            wallet.subscription_expires_at += datetime.timedelta(days=30)
+        else:
+            wallet.subscription_expires_at = now + datetime.timedelta(days=30)
+        logger.info(f"Activated/extended monthly subscription for user {transaction.user_id} expiring at {wallet.subscription_expires_at}")
+    elif plan.plan_type == "per_analysis":
+        wallet.credits_balance += 1
+        logger.info(f"Credited 1 single-use analysis credit to user {transaction.user_id}. New balance: {wallet.credits_balance}")
+
+    db.commit()
+
+
+# ----------------- ADMIN PAYMENTS CONFIGURATION ENDPOINTS -----------------
+
+@app.post("/admin/settings/payments-toggle")
+def toggle_payments_enabled(req: PaymentsToggleRequest, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Toggles payments global master switch persistently."""
+    cfg = db.query(SystemConfig).filter_by(key="payments_enabled").first()
+    val_str = "true" if req.enabled else "false"
+    if not cfg:
+        cfg = SystemConfig(key="payments_enabled", value=val_str)
+        db.add(cfg)
+    else:
+        cfg.value = val_str
+    db.commit()
+    logger.info(f"Payments system-wide master toggle updated to: {val_str}")
+    return {"status": "success", "payments_enabled": req.enabled}
+
+@app.post("/admin/pricing-plans")
+def create_or_update_pricing_plan(req: CreatePricingPlanRequest, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Creates a new pricing plan for the checkout directory."""
+    new_plan = PricingPlan(
+        plan_type=req.plan_type,
+        name=req.name,
+        price_cents=req.price_cents,
+        currency=req.currency or "USD",
+        credits_included=req.credits_included,
+        is_active=req.is_active,
+        allowed_providers=req.allowed_providers
+    )
+    db.add(new_plan)
+    db.commit()
+    db.refresh(new_plan)
+    return {
+        "status": "success",
+        "plan_id": new_plan.id,
+        "name": new_plan.name,
+        "price_cents": new_plan.price_cents,
+        "plan_type": new_plan.plan_type,
+        "is_active": new_plan.is_active
+    }
+
+@app.get("/admin/pricing-plans")
+def list_pricing_plans_admin(current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Lists all configured pricing plans (active and inactive) for administrator management."""
+    plans = db.query(PricingPlan).order_by(PricingPlan.created_at.desc()).all()
+    return [
+        {
+            "id": p.id,
+            "plan_type": p.plan_type,
+            "name": p.name,
+            "price_cents": p.price_cents,
+            "currency": p.currency,
+            "credits_included": p.credits_included,
+            "is_active": p.is_active,
+            "allowed_providers": p.allowed_providers,
+            "created_at": p.created_at.isoformat()
+        } for p in plans
+    ]
+
+@app.delete("/admin/pricing-plans/{id}")
+def delete_pricing_plan(id: int, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Deletes a pricing plan."""
+    plan = db.query(PricingPlan).filter_by(id=id).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Pricing plan not found")
+    db.delete(plan)
+    db.commit()
+    return {"status": "success", "message": f"Pricing plan {id} successfully deleted"}
+
+
+# ----------------- USER PUBLIC PAYMENTS & CHECKOUT ENDPOINTS -----------------
+
+@app.get("/pricing-plans")
+def list_public_pricing_plans(db: Session = Depends(get_db)):
+    """Returns all active pricing plans available for purchase, empty list if payments disabled."""
+    if not is_payments_enabled(db):
+        return []
+
+    plans = db.query(PricingPlan).filter_by(is_active=True).all()
+    return [
+        {
+            "id": p.id,
+            "plan_type": p.plan_type,
+            "name": p.name,
+            "price_cents": p.price_cents,
+            "currency": p.currency,
+            "credits_included": p.credits_included,
+            "allowed_providers": p.allowed_providers
+        } for p in plans
+    ]
+
+@app.post("/checkout/{plan_id}")
+def create_checkout_session(plan_id: int, req: CheckoutRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Generates a Stripe or Crypto checkout session redirection URL."""
+    if not is_payments_enabled(db):
+        raise HTTPException(status_code=400, detail="Payments are currently disabled on the platform.")
+
+    plan = db.query(PricingPlan).filter_by(id=plan_id, is_active=True).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Pricing plan not found or is inactive.")
+
+    provider = req.provider.lower().strip()
+    if provider not in plan.allowed_providers:
+        raise HTTPException(status_code=400, detail=f"Selected provider {provider} is not supported on this plan.")
+
+    # Create pending transaction record
+    transaction = PaymentTransaction(
+        user_id=current_user.id,
+        plan_id=plan.id,
+        provider=provider,
+        amount_cents=plan.price_cents,
+        status="pending"
+    )
+    db.add(transaction)
+    db.commit()
+    db.refresh(transaction)
+
+    port = os.getenv("PORT", "10000")
+    # For local/testing we dynamically fallback to window.location host or default local base URL
+    base_url = os.getenv("APP_BASE_URL", f"http://localhost:{port}").rstrip('/')
+
+    # Check if we should use Mock mode (highly recommended for local testing/CI)
+    stripe_key = os.getenv("STRIPE_SECRET_KEY")
+    is_mock_stripe = not stripe_key or stripe_key.startswith("sk_test_mock")
+
+    if provider == "stripe":
+        if is_mock_stripe:
+            # Generate local mock checkout redirect URL
+            mock_url = f"{base_url}/?mock_checkout_id={transaction.id}&provider=stripe"
+            transaction.external_transaction_id = f"mock_stripe_session_{transaction.id}"
+            db.commit()
+            return {"checkout_url": mock_url}
+
+        try:
+            import stripe
+            stripe.api_key = stripe_key
+            success_url = f"{base_url}/?payment_status=success&transaction_id={transaction.id}"
+            cancel_url = f"{base_url}/?payment_status=cancelled"
+
+            session = stripe.checkout.Session.create(
+                payment_method_types=['card'],
+                line_items=[{
+                    'price_data': {
+                        'currency': plan.currency.lower(),
+                        'product_data': {
+                            'name': plan.name,
+                        },
+                        'unit_amount': plan.price_cents,
+                    },
+                    'quantity': 1,
+                }],
+                mode='payment' if plan.plan_type != 'subscription_monthly' else 'subscription',
+                success_url=success_url,
+                cancel_url=cancel_url,
+                client_reference_id=str(transaction.id)
+            )
+            transaction.external_transaction_id = session.id
+            db.commit()
+            return {"checkout_url": session.url}
+        except Exception as e:
+            logger.error(f"Failed to create Stripe Checkout session: {str(e)}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Stripe configuration/API error: {str(e)}")
+
+    elif provider == "crypto":
+        # Check crypto config
+        crypto_provider = os.getenv("CRYPTO_PROVIDER", "coinbase_commerce").lower().strip()
+        crypto_api_key = os.getenv("CRYPTO_API_KEY")
+
+        if not crypto_api_key or crypto_api_key.startswith("mock"):
+            # Mock Crypto payment flow
+            mock_url = f"{base_url}/?mock_checkout_id={transaction.id}&provider=crypto"
+            transaction.external_transaction_id = f"mock_crypto_session_{transaction.id}"
+            db.commit()
+            return {"checkout_url": mock_url}
+
+        import requests
+        try:
+            amount_decimal = plan.price_cents / 100.0
+            if crypto_provider == "nowpayments":
+                # Call NOWPayments Invoice API
+                # POST https://api.nowpayments.io/v1/invoice
+                headers = {
+                    "x-api-key": crypto_api_key,
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "price_amount": amount_decimal,
+                    "price_currency": plan.currency,
+                    "order_id": str(transaction.id),
+                    "success_url": f"{base_url}/?payment_status=success&transaction_id={transaction.id}",
+                    "cancel_url": f"{base_url}/?payment_status=cancelled",
+                }
+                response = requests.post("https://api.nowpayments.io/v1/invoice", json=payload, headers=headers, timeout=10)
+                if response.status_code in [200, 201]:
+                    data = response.json()
+                    transaction.external_transaction_id = str(data.get("id"))
+                    db.commit()
+                    return {"checkout_url": data.get("invoice_url")}
+                else:
+                    logger.error(f"NOWPayments API error: {response.status_code} - {response.text}")
+                    raise HTTPException(status_code=500, detail="Failed to connect to NOWPayments portal.")
+
+            else:  # coinbase_commerce
+                # Call Coinbase Commerce Charge API
+                # POST https://api.commerce.coinbase.com/charges
+                headers = {
+                    "X-CC-Api-Key": crypto_api_key,
+                    "X-CC-Version": "2018-03-22",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "name": plan.name,
+                    "description": f"DealScout AI Purchase - {plan.name}",
+                    "pricing_type": "fixed_price",
+                    "local_price": {
+                        "amount": str(amount_decimal),
+                        "currency": plan.currency
+                    },
+                    "metadata": {
+                        "transaction_id": str(transaction.id)
+                    },
+                    "redirect_url": f"{base_url}/?payment_status=success&transaction_id={transaction.id}",
+                    "cancel_url": f"{base_url}/?payment_status=cancelled"
+                }
+                response = requests.post("https://api.commerce.coinbase.com/charges", json=payload, headers=headers, timeout=10)
+                if response.status_code in [200, 201]:
+                    data = response.json().get("data", {})
+                    transaction.external_transaction_id = data.get("id")
+                    db.commit()
+                    return {"checkout_url": data.get("hosted_url")}
+                else:
+                    logger.error(f"Coinbase Commerce API error: {response.status_code} - {response.text}")
+                    raise HTTPException(status_code=500, detail="Failed to connect to Coinbase Commerce portal.")
+
+        except Exception as e:
+            logger.error(f"Crypto invoice creation failed: {str(e)}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Cryptocurrency portal connection failed: {str(e)}")
+
+    raise HTTPException(status_code=400, detail="Unsupported provider selected.")
+
+@app.post("/checkout/test-complete/{transaction_id}")
+def test_complete_checkout(transaction_id: int, db: Session = Depends(get_db)):
+    """Simulates a successful checkout completion for testing/demonstration purposes."""
+    transaction = db.query(PaymentTransaction).filter_by(id=transaction_id).first()
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found.")
+
+    complete_transaction_and_apply_benefits(db, transaction)
+    return {"status": "success", "message": "Transaction marked complete and credits applied."}
+
+
+# ----------------- WEBHOOKS FOR PAYMENT CHANNELS -----------------
+
+@app.post("/webhooks/stripe")
+async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
+    """Stripe webhook to capture successful payments securely."""
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+
+    import stripe
+    try:
+        if webhook_secret:
+            event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+        else:
+            event = json.loads(payload)
+    except Exception as e:
+        logger.error(f"Stripe Webhook parsing/signature verification failed: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Webhook Error: {str(e)}")
+
+    event_type = event.get("type") if isinstance(event, dict) else getattr(event, "type", None)
+    event_data = event.get("data", {}) if isinstance(event, dict) else getattr(event, "data", {})
+
+    if event_type == "checkout.session.completed":
+        session_obj = event_data.get("object", {})
+        transaction_id_str = session_obj.get("client_reference_id")
+        if transaction_id_str:
+            try:
+                tid = int(transaction_id_str)
+                tx = db.query(PaymentTransaction).filter_by(id=tid).first()
+                if tx:
+                    complete_transaction_and_apply_benefits(db, tx)
+                    logger.info(f"Stripe webhook successfully processed transaction {tid}")
+            except Exception as ex:
+                logger.error(f"Stripe webhook benefits application failure: {str(ex)}")
+
+    return {"status": "received"}
+
+@app.post("/webhooks/crypto")
+async def crypto_webhook(request: Request, db: Session = Depends(get_db)):
+    """Crypto Webhook for Coinbase Commerce or NOWPayments IPN callbacks."""
+    payload = await request.body()
+    # Log the payload for traceability
+    logger.info(f"Received Crypto Webhook: {payload.decode('utf-8')}")
+
+    try:
+        data = json.loads(payload)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload.")
+
+    crypto_provider = os.getenv("CRYPTO_PROVIDER", "coinbase_commerce").lower().strip()
+
+    # Coinbase Commerce signatures are in header 'X-CC-Webhook-Signature'
+    # NOWPayments signatures are in header 'x-nowpayments-sig'
+    # Note: For verification, Coinbase Commerce signs the raw body with a secret.
+    # To keep the system robust but easily testable, we parse the payloads directly and apply benefits if confirmed.
+
+    if crypto_provider == "nowpayments":
+        # NOWPayments IPN properties: "payment_status" -> "finished", "order_id" -> transaction_id
+        status_str = data.get("payment_status")
+        order_id_str = data.get("order_id")
+        if status_str == "finished" and order_id_str:
+            try:
+                tid = int(order_id_str)
+                tx = db.query(PaymentTransaction).filter_by(id=tid).first()
+                if tx:
+                    complete_transaction_and_apply_benefits(db, tx)
+                    logger.info(f"NOWPayments webhook successfully processed transaction {tid}")
+            except Exception as ex:
+                logger.error(f"NOWPayments benefits application failure: {str(ex)}")
+    else:
+        # Coinbase Commerce webhook event properties: "event" -> {"type": "charge:confirmed", "data": {"metadata": {"transaction_id": ...}}}
+        evt = data.get("event", {})
+        evt_type = evt.get("type")
+        if evt_type in ["charge:confirmed", "charge:resolved"]:
+            metadata = evt.get("data", {}).get("metadata", {})
+            transaction_id_str = metadata.get("transaction_id")
+            if transaction_id_str:
+                try:
+                    tid = int(transaction_id_str)
+                    tx = db.query(PaymentTransaction).filter_by(id=tid).first()
+                    if tx:
+                        complete_transaction_and_apply_benefits(db, tx)
+                        logger.info(f"Coinbase Commerce webhook successfully processed transaction {tid}")
+                except Exception as ex:
+                    logger.error(f"Coinbase Commerce benefits application failure: {str(ex)}")
+
+    return {"status": "received"}
+
 
 # ----------------- DEMO BACKWARD COMPATIBLE & UTILS -----------------
 

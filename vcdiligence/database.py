@@ -218,6 +218,65 @@ class ListingInterest(Base):
     listing = relationship("CompanyListing")
     vc_user = relationship("User")
 
+class ApiKeyPool(Base):
+    __tablename__ = "api_key_pools"
+
+    id = Column(Integer, primary_key=True, index=True)
+    provider = Column(String, nullable=False)  # "openrouter", "grok", "openai"
+    api_key = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    status = Column(String, default="healthy", nullable=False)  # "healthy", "exhausted", "disabled"
+    consecutive_failures = Column(Integer, default=0, nullable=False)
+    last_used_at = Column(DateTime, nullable=True)
+    last_failure_reason = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+class PricingPlan(Base):
+    __tablename__ = "pricing_plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    plan_type = Column(String, nullable=False)  # "per_analysis", "subscription_monthly", "credit_bundle"
+    name = Column(String, nullable=False)
+    price_cents = Column(Integer, nullable=False)
+    currency = Column(String, default="USD", nullable=False)
+    credits_included = Column(Integer, nullable=True)  # only for credit_bundle
+    is_active = Column(Boolean, default=False, nullable=False)
+    allowed_providers = Column(JSON, default=list, nullable=False)  # e.g., ["stripe", "crypto"]
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+class UserWallet(Base):
+    __tablename__ = "user_wallets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+    credits_balance = Column(Integer, default=0, nullable=False)
+    subscription_active = Column(Boolean, default=False, nullable=False)
+    subscription_expires_at = Column(DateTime, nullable=True)
+
+    user = relationship("User")
+
+class PaymentTransaction(Base):
+    __tablename__ = "payment_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    plan_id = Column(Integer, ForeignKey("pricing_plans.id"), nullable=False)
+    provider = Column(String, nullable=False)  # "stripe" or "crypto"
+    external_transaction_id = Column(String, nullable=True)
+    amount_cents = Column(Integer, nullable=False)
+    status = Column(String, default="pending", nullable=False)  # "pending", "completed", "failed", "refunded"
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+
+    user = relationship("User")
+    plan = relationship("PricingPlan")
+
+class SystemConfig(Base):
+    __tablename__ = "system_configs"
+
+    key = Column(String, primary_key=True, index=True)
+    value = Column(String, nullable=False)
+
 def init_db():
     Base.metadata.create_all(bind=engine)
 

@@ -5,9 +5,42 @@ from crewai.project import CrewBase, agent, crew, task
 from typing import List
 from vcdiligence.llm_manager import LLMProviderManager
 
+from vcdiligence.logging_config import logger
+
+def run_crew_with_rotation(inputs, task_callback=None, user_priorities=None, custom_focus_keywords=None, db_session=None):
+    """
+    Executes the MarketResearchCrew.kickoff() with automatic API key rotation and retries up to 3 times.
+    """
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        crew_obj = MarketResearchCrew(
+            task_callback=task_callback,
+            user_priorities=user_priorities,
+            custom_focus_keywords=custom_focus_keywords,
+            db_session=db_session
+        )
+        inputs["user_priorities_block"] = crew_obj.user_priorities_block
+        try:
+            logger.info(f"Kicking off MarketResearchCrew (attempt {attempt + 1}/3) using provider: {crew_obj.provider_name}, key_id: {crew_obj.key_id}")
+            result = crew_obj.crew().kickoff(inputs=inputs)
+            if crew_obj.key_id is not None:
+                LLMProviderManager.mark_key_result(crew_obj.key_id, success=True, db_session=db_session)
+            return result, crew_obj.provider_name
+        except Exception as e:
+            err_str = str(e)
+            logger.warning(f"Crew kickoff failed on attempt {attempt + 1} with error: {err_str}")
+
+            if crew_obj.key_id is not None:
+                LLMProviderManager.mark_key_result(crew_obj.key_id, success=False, error_message=err_str, db_session=db_session)
+
+            if attempt == max_attempts - 1:
+                logger.error("Maximum retries with key rotation reached. Failing analysis.")
+                raise e
+            logger.info("Retrying with a different key from the pool...")
+
 @CrewBase
 class MarketResearchCrew():
-    def __init__(self, task_callback=None, user_priorities=None, custom_focus_keywords=None):
+    def __init__(self, task_callback=None, user_priorities=None, custom_focus_keywords=None, db_session=None):
         base_path = os.path.dirname(__file__)
         agents_yaml_path = os.path.join(base_path, "config", "agents.yaml")
         tasks_yaml_path = os.path.join(base_path, "config", "tasks.yaml")
@@ -17,7 +50,7 @@ class MarketResearchCrew():
         with open(tasks_yaml_path, "r", encoding="utf-8") as f:
             self.tasks_config = yaml.safe_load(f)
 
-        self.llm, self.provider_name = LLMProviderManager.get_llm()
+        self.llm, self.provider_name, self.key_id = LLMProviderManager.get_llm_from_pool(db_session=db_session)
         self.task_callback = task_callback
 
         # Generate dynamic user priorities instruction block
