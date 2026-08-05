@@ -1,7 +1,7 @@
 import unittest
 from unittest import mock
 from crewai import LLM
-from vcdiligence.crew import MarketResearchCrew
+from vcdiligence.crew import MarketResearchCrew, TokenBudgetExceededError, run_crew_with_rotation
 
 class TestCrewConfig(unittest.TestCase):
     @mock.patch("vcdiligence.llm_manager.LLMProviderManager.get_llm")
@@ -56,10 +56,34 @@ class TestCrewConfig(unittest.TestCase):
             prompt_tokens=100, completion_tokens=50, total_tokens=150
         )
 
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(TokenBudgetExceededError) as context:
             crew_obj._log_and_check_budget("market_research_specialist", mock_agent, mock_output)
 
         self.assertIn("presupuesto de tokens", str(context.exception))
+
+    @mock.patch("vcdiligence.llm_manager.LLMProviderManager.mark_key_result")
+    @mock.patch("vcdiligence.llm_manager.LLMProviderManager.get_llm_from_pool")
+    @mock.patch("vcdiligence.crew.MarketResearchCrew.crew")
+    def test_run_crew_with_rotation_on_token_budget_exceeded(self, mock_crew_method, mock_get_llm_from_pool, mock_mark_key_result):
+        """Verify that TokenBudgetExceededError fails immediately without calling mark_key_result and without retries."""
+        mock_llm = LLM(model="openai/gpt-4o-mini", api_key="dummy")
+        mock_get_llm_from_pool.return_value = (mock_llm, "openai", 42)
+
+        # Mock the crew and its kickoff to raise TokenBudgetExceededError
+        mock_crew_instance = mock.MagicMock()
+        mock_crew_instance.kickoff.side_effect = TokenBudgetExceededError("Presupuesto de tokens excedido")
+        mock_crew_method.return_value = mock_crew_instance
+
+        inputs = {"company_name": "TestCorp", "company_url": "https://testcorp.com"}
+
+        with self.assertRaises(TokenBudgetExceededError):
+            run_crew_with_rotation(inputs)
+
+        # Ensure that mark_key_result was never called since the API key was not the issue
+        mock_mark_key_result.assert_not_called()
+
+        # Ensure that crew.kickoff was only called once, i.e., rotation did not retry
+        self.assertEqual(mock_crew_instance.kickoff.call_count, 1)
 
     def test_agent_finding_schema_validation(self):
         """Verify that AgentFinding Pydantic model correctly validates fields."""

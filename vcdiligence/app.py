@@ -1834,8 +1834,14 @@ def update_admin_config(
     db: Session = Depends(get_db)
 ):
     """
-    Updates a system configuration value.
+    Updates a system configuration value. Validates that the key is known.
     """
+    if key not in CONFIG_REGISTRY:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"La clave de configuración '{key}' no es una de las conocidas en el CONFIG_REGISTRY de la plataforma."
+        )
+
     cfg = set_config(db, key, value)
     return {
         "status": "success",

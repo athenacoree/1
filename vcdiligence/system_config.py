@@ -56,6 +56,12 @@ CONFIG_REGISTRY = {
         "category": "llm_budget",
         "default": 0,
         "description": "Límite de tokens en cada llamada individual de un agente (0 = sin límite)"
+    },
+    "payments_enabled": {
+        "value_type": "bool",
+        "category": "payments",
+        "default": False,
+        "description": "Habilitar/Deshabilitar sistema de pagos"
     }
 }
 

@@ -294,7 +294,28 @@ class SystemConfig(Base):
     description = Column(String, default="", nullable=False)
 
 def init_db():
-    Base.metadata.create_all(bind=engine)
+    import os
+    import sys
+    from alembic.config import Config
+    from alembic import command
+
+    # Check if we are in testing environment
+    is_testing = os.getenv("TESTING") or "unittest" in sys.modules
+
+    if is_testing:
+        # For unit testing, metadata.create_all is safer and faster
+        Base.metadata.create_all(bind=engine)
+        return
+
+    try:
+        # Get root path of the repo where alembic.ini is located
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        ini_path = os.path.join(base_dir, "alembic.ini")
+        alembic_cfg = Config(ini_path)
+        command.upgrade(alembic_cfg, "head")
+    except Exception as e:
+        # Fallback to create_all if alembic upgrade fails
+        Base.metadata.create_all(bind=engine)
 
 def get_db():
     db = SessionLocal()

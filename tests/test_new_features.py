@@ -379,6 +379,25 @@ class TestNewFeatures(unittest.TestCase):
         self.assertEqual(resp_update.status_code, 200)
         self.assertFalse(resp_update.json()["verified_domain"])
 
+    def test_admin_config_validation(self):
+        """Verify that updating config validates the key against CONFIG_REGISTRY."""
+        admin_headers = {"Authorization": f"Bearer {self.admin_token}"}
+        analyst_headers = {"Authorization": f"Bearer {self.analyst_token}"}
+
+        # 1. Non-admin user tries to access -> 403 Forbidden
+        resp_analyst = self.client.post("/admin/config", data={"key": "platform_name", "value": "New Scout"}, headers=analyst_headers)
+        self.assertEqual(resp_analyst.status_code, 403)
+
+        # 2. Admin tries to update valid key -> 200 Success
+        resp_valid = self.client.post("/admin/config", data={"key": "platform_name", "value": "DealScout Pro"}, headers=admin_headers)
+        self.assertEqual(resp_valid.status_code, 200)
+        self.assertEqual(resp_valid.json()["value"], "DealScout Pro")
+
+        # 3. Admin tries to update invalid/arbitrary key -> 400 Bad Request
+        resp_invalid = self.client.post("/admin/config", data={"key": "arbitrary_evil_key", "value": "hack"}, headers=admin_headers)
+        self.assertEqual(resp_invalid.status_code, 400)
+        self.assertIn("no es una de las conocidas en el CONFIG_REGISTRY", resp_invalid.json()["detail"])
+
 
 if __name__ == "__main__":
     unittest.main()

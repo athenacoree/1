@@ -8,6 +8,10 @@ from vcdiligence.agent_schemas import AgentFinding
 
 from vcdiligence.logging_config import logger
 
+class TokenBudgetExceededError(Exception):
+    """Exception raised when the configured cumulative token budget for an analysis is exceeded."""
+    pass
+
 class WrappedCallback:
     def __init__(self, crew, agent_name, agent_obj, original_callback=None):
         self.crew = crew
@@ -43,6 +47,9 @@ def run_crew_with_rotation(inputs, task_callback=None, user_priorities=None, cus
             if crew_obj.key_id is not None:
                 LLMProviderManager.mark_key_result(crew_obj.key_id, success=True, db_session=db_session)
             return result, crew_obj.provider_name
+        except TokenBudgetExceededError as e:
+            logger.error(f"Token budget exceeded, failing immediately: {str(e)}")
+            raise e
         except Exception as e:
             err_str = str(e)
             logger.warning(f"Crew kickoff failed on attempt {attempt + 1} with error: {err_str}")
@@ -161,7 +168,7 @@ class MarketResearchCrew():
         if self.max_tokens_per_analysis > 0 and cumulative_total > self.max_tokens_per_analysis:
             err_msg = f"Se ha alcanzado el presupuesto de tokens configurado: {cumulative_total} consumidos de {self.max_tokens_per_analysis} permitidos."
             logger.error(err_msg)
-            raise ValueError(err_msg)
+            raise TokenBudgetExceededError(err_msg)
 
     @agent
     def market_research_specialist(self) -> Agent:
