@@ -4,7 +4,7 @@ services:
     env: python
     plan: free
     buildCommand: pip install --upgrade pip && pip install -e . && playwright install chromium
-    startCommand: "alembic upgrade head && python -m vcdiligence.app"
+    startCommand: "alembic upgrade head && python -m vcdiligence.seed && python -m vcdiligence.app"
     autoDeploy: false
     envVars:
       - key: DATABASE_URL
