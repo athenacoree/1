@@ -1,0 +1,90 @@
+services:
+  - type: web
+    name: dealscout-ai
+    env: python
+    plan: free
+    buildCommand: "poetry install && poetry run playwright install chromium"
+    startCommand: "poetry run alembic upgrade head && poetry run python -m vcdiligence.app"
+    autoDeploy: false
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vcdiligence-db
+          property: connectionString
+
+      - key: JWT_SECRET
+        sync: false
+        description: "Clave secreta obligatoria para la firma y verificación de tokens JWT"
+
+      - key: ADMIN_BOOTSTRAP_PASSWORD
+        sync: false
+        description: "Contraseña para la inicialización y seeding del usuario administrador predeterminado"
+
+      - key: API_KEY_OPENROUTER
+        sync: false
+        description: "API Key obligatoria de OpenRouter (o de tu LLM preferido) para las llamadas a los agentes"
+
+      - key: LLM_PROVIDER
+        value: "openrouter"
+        description: "Proveedor de LLM predeterminado (openrouter, grok, u openai)"
+
+      - key: PORT
+        value: "10000"
+        description: "Puerto de escucha para la aplicación FastAPI"
+
+      - key: MIN_USERS_TO_SHOW_STATS
+        value: "20"
+        description: "Mínimo de usuarios requeridos para desplegar estadísticas globales públicamente"
+
+      - key: LISTING_EXPIRY_DAYS
+        value: "60"
+        description: "Días de vigencia predeterminados para las publicaciones del directorio"
+
+      # --- VARIABLES OPCIONALES (Mantenidas como comentarios en la configuración de Render) ---
+      # Si se dejan vacías, el sistema operará de manera degradada con gracia (los servicios se desactivarán o usarán mockings)
+      # - key: STRIPE_SECRET_KEY
+      #   sync: false
+      #   description: "Opcional: API Key de Stripe para la pasarela de pagos"
+      # - key: STRIPE_WEBHOOK_SECRET
+      #   sync: false
+      #   description: "Opcional: Secreto del Webhook de Stripe para el procesamiento asíncrono"
+      # - key: CRYPTO_PROVIDER
+      #   value: "coinbase_commerce"
+      #   description: "Opcional: Proveedor para criptomonedas ('coinbase_commerce' o 'nowpayments')"
+      # - key: CRYPTO_API_KEY
+      #   sync: false
+      #   description: "Opcional: API Key de tu pasarela de criptomonedas"
+      # - key: BACKUP_S3_ENDPOINT
+      #   sync: false
+      #   description: "Opcional: Endpoint S3 para almacenamiento de backups/logos"
+      # - key: BACKUP_S3_ACCESS_KEY
+      #   sync: false
+      #   description: "Opcional: Access Key para tu bucket S3"
+      # - key: BACKUP_S3_SECRET_KEY
+      #   sync: false
+      #   description: "Opcional: Secret Key para tu bucket S3"
+      # - key: BACKUP_S3_BUCKET
+      #   sync: false
+      #   description: "Opcional: Nombre de tu bucket S3"
+      # - key: COMPANIES_HOUSE_API_KEY
+      #   sync: false
+      #   description: "Opcional: API Key de Companies House para lookups en Reino Unido"
+      # - key: SMTP_HOST
+      #   value: "smtp.gmail.com"
+      #   description: "Opcional: Servidor de envío de alertas por correo electrónico"
+      # - key: SMTP_PORT
+      #   value: "587"
+      #   description: "Opcional: Puerto de tu servidor SMTP"
+      # - key: SMTP_USERNAME
+      #   sync: false
+      #   description: "Opcional: Nombre de usuario de correo SMTP"
+      # - key: SMTP_PASSWORD
+      #   sync: false
+      #   description: "Opcional: Contraseña de tu correo SMTP"
+      # - key: SMTP_FROM
+      #   value: "noreply@dealscout.ai"
+      #   description: "Opcional: Remitente de los correos automáticos"
+
+databases:
+  - name: vcdiligence-db
+    plan: free

@@ -1,22 +1,54 @@
 # DealScout AI — Multi-Agent Venture Capital Due Diligence & Investment Directory
 
-Nota Importante: Solo necesita una sola API Key de Inteligencia Artificial para funcionar. El sistema está hecho tanto para funcionar de forma eficiente a bajo consumo (por ejemplo, en un entorno Render gratuito manteniendo un rendimiento estable y seguro), como para correr en servidores de mayor potencia. El cambio de potencia lo hace significativamente veloz y está diseñado para adaptarse con pocos recursos.
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/athenacoree/1)
 
-DealScout AI (configurado como `VCDueDiligenceAgent`) es un motor autónomo de due diligence para Venture Capital de nivel empresarial y un directorio interactivo bidireccional. Desarrollado con **FastAPI**, **SQLAlchemy** y **CrewAI**, automatiza el proceso de análisis de startups a partir de URLs públicas, Pitch Decks (PDF/PPTX) o perfiles de LinkedIn. Actúa como un sistema completo de soporte de decisiones, generando reportes de inversión PDF white-label personalizables, puntajes de readiness (0-100) y un directorio seguro para conectar fundadores con compradores e inversores calificados.
+**DealScout AI** (configurado internamente como `VCDueDiligenceAgent`) es una plataforma autónoma de auditoría (*due diligence*) y directorio bidireccional de inversión para startups y firmas de Venture Capital de nivel empresarial. Construida con **FastAPI**, **SQLAlchemy** y **CrewAI**, permite evaluar de forma profunda startups a partir de URLs públicas, presentaciones Pitch Deck (PDF/PPTX) o perfiles de LinkedIn, resolviendo la necesidad de análisis preliminares de alta fidelidad sin incurrir en procesos manuales lentos.
 
 ---
 
-## 🌟 Core Features
+## ⚡ ¿Qué hace diferente a DealScout AI?
 
-- **Autonomous Multi-Agent Cognition:** Orquestación coordinada de un equipo de 7 agentes especializados de CrewAI que investigan, analizan, debaten y compilan el memorando de inversión final.
-- **Dual-Sided Marketplace Directory:** Conecta de forma segura a Fundadores (que buscan inversión o están abiertos a adquisición) con Compradores/Inversores (VCS, ángeles independientes y analistas de desarrollo corporativo).
-- **Adaptive Scraper (Playwright fallback):** Un motor de scraping robusto que combina la velocidad de la extracción tradicional con `requests/BS4` con un navegador **Playwright headless Chromium** cargado bajo demanda solo cuando es necesario renderizar JavaScript pesado o evadir SPAs complejas.
-- **Live External API Integration:** Acceso en tiempo real a bases de datos de producción reales para obtener registros corporativos (OpenCorporates, SEC EDGAR Form D), patentes (USPTO), antecedentes de litigios legales (CourtListener), estado de sanciones internacionales (OFAC SDN List con fuzzy matching local) y actividad tecnológica (GitHub API).
-- **White-Label Customization & SystemConfig:** Panel administrativo centralizado donde se configuran dinámicamente variables visuales (colores de tema, mensajes de bienvenida/carga, nombres de plataforma) y límites de consumo sin necesidad de redeploy. Reportes ReportLab PDF generados con logos corporativos de alta resolución en tiempo real.
-- **Continuous Monitoring:** Escaneo automatizado periódico (usando un cron scheduler interno en APScheduler) para registrar y notificar cambios de puntaje, novedades legales y actualizaciones técnicas de las startups monitoreadas.
-- **Pool de API Keys con Rotación Automática (`ApiKeyPool`):** Gestión de múltiples llaves API de LLM de forma inteligente. Si una llave devuelve un error de rate-limit o falta de crédito, el sistema la marca temporalmente, rota automáticamente a otra llave saludable y un worker en segundo plano intenta recuperarla de forma autónoma cada 6 horas.
-- **Privacy-First Testimonial Engine:** Carrusel de feedback y testimonios de usuarios con consentimiento granular para compartir comentarios, nombres y fotos. Los testimonios con capturas de pantalla adjuntas se guardan en un buzón de moderación pendiente de aprobación del administrador.
-- **SSRF Mitigations & Rate-Limiting:** Políticas de protección listas para producción que validan direcciones IP públicas, bloqueando accesos a entornos internos de red (SSRF) y limitación de peticiones de análisis concurrentes.
+DealScout AI no es un "simple wrapper" o intermediario superficial de APIs de Inteligencia Artificial. Está diseñado bajo rigurosos patrones de ingeniería de software e infraestructura distribuida:
+
+1. **Pipeline Cognitivo Multi-Agente con Debate Adversarial (7 Agentes)**
+   En lugar de una sola llamada masiva a un LLM, DealScout AI coordina un equipo de 7 agentes especializados de **CrewAI** que actúan como un comité real de analistas de inversión. Los primeros 5 analistas especialistas (Market Research, Competitive Intelligence, Customer Insights, Product Strategy, y Omission Analyst) investigan y extraen hallazgos estructurados. Luego, el **Business Analyst** compila el reporte final, el cual es sometido al riguroso análisis adversarial del agente **Devil's Advocate** (Abogado del Diablo), encargado de cuestionar críticamente las tesis positivas de inversión, aportando un debate de nivel profesional inusual en sistemas automatizados.
+
+2. **Lógica de "Hallazgos Estructurados" de Bajo Consumo**
+   Para optimizar costes y evitar la "alucinación" y verbosidad innecesaria de la IA, los agentes especialistas no se pasan prosa larga entre sí. Cada uno genera y transmite un esquema **Pydantic** compacto (`AgentFinding`) con datos atómicos altamente condensados. Únicamente el agente de síntesis final redacta la prosa en formato de memorando humano. Esto reduce drásticamente el consumo de tokens de contexto y maximiza la precisión analítica.
+
+3. **Orquestación Concurrente e Inteligente de 12 Fuentes de Datos**
+   El sistema integra un orquestador multi-fuente (`source_orchestrator.py`) que gestiona consultas en paralelo (con un pool de hilos) a bases de datos de producción reales. El orquestador divide las fuentes en *necesarias* y *condicionales*. Basándose en heurísticas de dominio del startup y lo que se va descubriendo, el motor decide inteligentemente cuáles de las 12 fuentes consultar (SEC EDGAR Form D, patentes de la USPTO, litigios en CourtListener, registros de OpenCorporates, estado de sanciones de la OFAC SDN con fuzzy matching, GitHub, WHOIS, etc.), ahorrando recursos de red y cuotas de API.
+
+4. **Resiliencia de Infraestructura Empresarial**
+   DealScout AI incorpora un sistema avanzado de **circuit breaker** en memoria que pausa automáticamente las consultas a fuentes externas caídas o con timeouts para evitar demoras, un **Pool de API Keys con Rotación Automática (`ApiKeyPool`)** que detecta y aísla llaves con fallos consecutivos de cuotas (*rate limits*), y mitigaciones estrictas contra ataques **SSRF** para asegurar que el motor de scraping no sea utilizado de manera maliciosa.
+
+5. **Despliegue Transparente y 100% Reproducible**
+   Con la integración de Render Blueprints, puedes desplegar tu propio DealScout AI totalmente funcional con un solo clic, demostrando que es un sistema transparente, desacoplado y listo para ambientes de producción reales.
+
+---
+
+## 🚀 Despliegue en un Clic (Render Blueprint)
+
+Puedes desplegar una copia completa de DealScout AI y su base de datos relacional PostgreSQL de forma instantánea en la nube de Render usando el botón superior o el siguiente enlace:
+
+**[Desplegar en Render](https://render.com/deploy?repo=https://github.com/athenacoree/1)**
+
+### Variables de Entorno en el Formulario de Despliegue
+
+Al hacer clic en el botón de despliegue, el formulario de Render te solicitará completar las siguientes variables:
+
+#### 🔴 Obligatorias (Para que el sistema arranque con éxito):
+- `JWT_SECRET`: Una cadena de texto segura para firmar y verificar tokens de autenticación JWT. La aplicación fallará explícitamente en el inicio si se deja en blanco.
+- `ADMIN_BOOTSTRAP_PASSWORD`: Contraseña para inicializar el usuario administrador predeterminado (`admin@dealscout.ai`).
+- `API_KEY_OPENROUTER`: Tu API Key de OpenRouter (u otro LLM admitido como OpenAI o Grok) para alimentar las llamadas cognitivas de los agentes de IA.
+
+#### 🟢 Opcionales (Configurables para extender funcionalidades):
+Si dejas estas variables en blanco, el sistema operará con un **esquema de degradación con gracia**, desactivando la fuente correspondiente de manera segura o utilizando simulaciones seguras sin provocar fallos en el sistema:
+- `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET`: Activa y procesa cobros reales de tarjetas de crédito para el sistema de compra de créditos de análisis de startups. Si falta, la pasarela opera en modo de prueba (*Mock*).
+- `CRYPTO_API_KEY` / `CRYPTO_WEBHOOK_SECRET`: Activa cobros automatizados con criptomonedas (Coinbase Commerce o NOWPayments). Si falta, opera en modo simulado seguro.
+- `BACKUP_S3_ENDPOINT` / `ACCESS_KEY` / `SECRET_KEY` / `BUCKET`: Permite subir y respaldar los logos corporativos y capturas de marca blanca a buckets S3. Si falta, el sistema utiliza codificación Base64 en la base de datos de forma local.
+- `COMPANIES_HOUSE_API_KEY`: Habilita la consulta de registros de empresas oficiales del gobierno del Reino Unido. Si falta, se omite esa fuente de datos de manera silenciosa.
+- `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD`: Habilita el envío automático de PDFs firmados, notificaciones de expiración y alertas de interés de inversores a los fundadores. Si falta, las alertas se registran únicamente en los logs del servidor.
 
 ---
 
@@ -69,18 +101,6 @@ graph TD
 
 ---
 
-## 🖥️ Interfaz de Usuario (Descripción de Pantallas)
-
-Dado que no es posible desplegar recursos estáticos en vivo durante la compilación del repo, a continuación se describe brevemente la experiencia visual y estructural de cada pantalla principal del sistema:
-
-1. **Pantalla de Login / Registro:** Presenta una interfaz oscura elegante con el mensaje de bienvenida dinámico configurado por el administrador (`welcome_message`), campos para ingresar correo y contraseña, y una opción rápida para registrarse como inversor (personal) o fundador (empresa) con código de invitación/referido si posee.
-2. **Dashboard de Análisis (Founder / Investor):**
-   - **Para Inversionistas:** Permite buscar startups ingresando el nombre de la compañía, URL directa o LinkedIn. Muestra una lista de análisis completados con su Readiness Score, recomendación de inversión (GO/CONDITIONAL/NO-GO), botones para descargar el reporte PDF, realizar comparación múltiple, y activar monitoreo continuo.
-   - **Para Fundadores:** Permite ver los resultados de su propio análisis, configurar su listado público en el directorio de inversión, subir su Pitch Deck o actualizar su perfil de empresa con dominio verificado.
-3. **Panel Administrativo (Admin Console):** Secciones dedicadas para que los administradores editen las variables del sistema (`SystemConfig`) en tiempo real (por ejemplo, presupuestos de tokens o switch de pasarela de pagos), ver el estado detallado de las llaves del pool (`api_key_pools`) y sus consecutivas fallas de conexión, moderar testimonios con capturas, examinar logs de errores, y verificar manualmente cuentas de empresas (`verified_by_admin = true`).
-
----
-
 ## 🛠 Directory and Account Types ("Buyer vs Founder")
 
 El sistema separa las cuentas e interacciones en dos flujos completamente aislados:
@@ -93,14 +113,25 @@ El sistema separa las cuentas e interacciones en dos flujos completamente aislad
 ### 2. Directorio Bidireccional y Contacto Seguro ("Me interesa")
 - **Consentimiento de Publicación (Opt-In):** Ninguna startup analizada se publica automáticamente. Los fundadores deben configurar explícitamente sus parámetros de listado (categoría, descripción de visibilidad, y decidir si mostrar su score numérico exacto o una insignia cualitativa de rendimiento).
 - **Moderación:** Las solicitudes se guardan como `pending_review` y requieren aprobación manual de un administrador para ser visibles públicamente.
-- **Lead Generation Seguro:** El correo directo del fundador permanece oculto para evitar spam. Cuando un inversor autenticado hace clic en **"Me interesa"**, el sistema registra la solicitud en `ListingInterest` y despacha un correo de alerta SMTP seguro directamente al fundador con los datos del inversor interesado.
+- **Lead Generation Seguro:** El correo directo del fundador permanece oculto para evitar spam. Cuando un inversor autenticado hace clic en **"Me interesa"**, el sistema registra la solicitud en `ListingInterest` y despacha un correo de alerta SMTP seguro directamente al fundador con los datos del inversionista interesado.
 - **Expiración de Listados:** Los anuncios expiran de manera automática a los 60 días. El sistema envía notificaciones previas por correo con un enlace seguro de renovación rápida de un solo clic.
 
 ---
 
-## ⚙️ Configuración y Variables de Entorno
+## 🖥️ Interfaz de Usuario (Descripción de Pantallas)
 
-### 1. Variables de Entorno Requeridas en Arranque (.env)
+Dado que no es posible desplegar recursos estáticos en vivo durante la compilación del repo, a continuación se describe brevemente la experiencia visual y estructural de cada pantalla principal del sistema:
+
+1. **Pantalla de Login / Registro:** Presenta una interfaz oscura elegante con el mensaje de bienvenida dinámico configurado por el administrador (`welcome_message`), campos para ingresar correo y contraseña, y una opción rápida para registrarse como inversor (personal) o fundador (empresa) con código de invitación/referido si posee.
+2. **Dashboard de Análisis (Founder / Investor):**
+   - **Para Inversionistas:** Permite buscar startups ingresando el nombre de la compañía, URL directa o LinkedIn. Muestra una lista de análisis completados con su Readiness Score, recomendación de inversión (GO/CONDITIONAL/NO-GO), botones para descargar el reporte PDF, realizar comparación múltiple, y activar monitoreo continuo.
+   - **Para Fundadores:** Permite ver los resultados de su propio análisis, configurar su listado público en el directorio de inversión, subir su Pitch Deck o actualizar su perfil de empresa con dominio verificado.
+3. **Panel Administrativo (Admin Console):** Secciones dedicadas para que los administradores editen las variables del sistema (`SystemConfig`) en tiempo real (por ejemplo, presupuestos de tokens o switch de pasarela de pagos), ver el estado detallado de las llaves del pool (`api_key_pools`) y sus consecutivas fallas de conexión, moderar testimonios con capturas, examinar logs de errores, y verificar manualmente cuentas de empresas (`verified_by_admin = true`).
+
+---
+
+## ⚙️ Configuración y Variables de Entorno de Desarrollo (.env)
+
 A diferencia de los ajustes de diseño configurables desde el Panel de Admin, estas claves de bajo nivel son requeridas en la inicialización:
 
 | Variable | Descripción | Default / Opción |
@@ -112,21 +143,6 @@ A diferencia de los ajustes de diseño configurables desde el Panel de Admin, es
 | `LISTING_EXPIRY_DAYS` | Vigencia de un listado de inversión pública antes de expirar | `60` |
 | `SMTP_HOST` / `SMTP_PORT` | Configuración del servidor de alertas SMTP | `smtp.gmail.com` \| `587` |
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | Credenciales de correo de alertas | Opcional |
-
-### 2. Configuración Centralizada en Base de Datos (SystemConfig)
-Estas propiedades se guardan directamente en la tabla `SystemConfig` y pueden ser modificadas en vivo por los administradores desde el panel visual:
-
-- **Configuración de Marca (Branding):**
-  - `platform_name`: Nombre visible del portal (por defecto `DealScout AI`).
-  - `theme_color`: Estilo CSS principal (`dark`, `light`, `red`).
-  - `logo_url`: Enlace público o string Base64 del logo corporativo institucional.
-  - `welcome_message`: Mensaje de portada en landing/login.
-  - `analysis_loading_message`: Mensaje desplegado durante el scraping y análisis de agentes.
-  - `analysis_complete_message`: Leyenda de finalización exitosa.
-  - `footer_message`: Pie de página global del portal.
-- **Presupuestos y Consumos (LLM Budget):**
-  - `max_tokens_per_analysis`: Presupuesto acumulativo de tokens consumidos por todo el grupo de agentes en una sola corrida (0 = sin límite). Si se supera, se cancela la ejecución inmediatamente levantando un `TokenBudgetExceededError` para evitar sobrefacturación sin afectar la salud de la API Key.
-  - `max_tokens_per_agent_call`: Límite máximo de tokens de respuesta permitido para cada consulta individual de un especialista (0 = sin límite).
 
 ---
 
@@ -146,12 +162,12 @@ Estas propiedades se guardan directamente en la tabla `SystemConfig` y pueden se
 
 ---
 
-## 🚀 Quick Start & Instalación
+## 🛠 Quick Start & Instalación de Desarrollo
 
 ### 1. Clonar el Repositorio e Instalar Dependencias
 Asegúrate de contar con Python y Poetry instalado en tu máquina de desarrollo:
 ```bash
-git clone https://github.com/SURESHBEEKHANI/CrewAI-End-to-End.git DealScoutAI
+git clone https://github.com/athenacoree/1.git DealScoutAI
 cd DealScoutAI
 poetry install
 poetry run playwright install chromium
@@ -196,17 +212,8 @@ poetry run python -m unittest discover -s tests
 
 ---
 
-## ⚡ Optimización de Recursos
+## 👨‍💻 Creador y Atribuciones
 
-El sistema se diseñó de manera ágil e inteligente para operar con mínima sobrecarga:
-- **Modelo de LLM Unificado:** Funciona consumiendo **únicamente** un proveedor configurado a la vez, simplificando radicalmente costos.
-- **Navegador Playwright Bajo Demanda:** Solo levanta y arranca el motor Chromium headless si la extracción HTML inicial mediante `requests` detecta SPAs o firewalls pesados. El navegador se destruye inmediatamente al terminar para liberar memoria RAM.
-- **SMTP Seguro Integrado:** La entrega de correos se ejecuta a nivel de función nativa sin requerir workers pesados corriendo continuamente en segundo plano.
+**DealScout AI** es desarrollado y mantenido por **[Marlon Baez Mendez](https://github.com/athenacoree/MARLON-BAEZ-MENDEZ-)**.
 
----
-
-## 👨‍💻 Creador
-
-**DealScout AI** es un proyecto creado y mantenido por **[Marlon Baez Mendez](https://github.com/athenacoree/MARLON-BAEZ-MENDEZ-)**.
-
-Para más información sobre el autor, consulta su [bibliografía oficial](https://github.com/athenacoree/MARLON-BAEZ-MENDEZ-).
+Este proyecto se originó como un fork de un repositorio de código abierto bajo licencia MIT desarrollado originalmente por **Suresh Beekhani**. Conservamos y respetamos honestamente la autoría de las porciones del código original; sin embargo, el sistema ha sido sustancialmente reescrito, rediseñado y expandido con un conjunto de características avanzadas de nivel empresarial para optimizar consumos, rotar accesos, procesar pagos y robustecer la seguridad global.
