@@ -113,4 +113,65 @@ Para que cualquier agente de IA o programador pueda navegar por el repositorio c
 
 ---
 
+## 🚀 Personalización de Marca, Presupuestos de IA y Rediseño de Agentes
+
+### ¿Cómo funciona el nuevo flujo rediseñado de los agentes de CrewAI?
+Para optimizar el consumo de tokens y evitar la reescritura repetitiva de información extensa en prosa entre pasos, DealScout AI ha sido rediseñado bajo un modelo jerárquico estructurado:
+
+1. **5 Agentes Especialistas Compactos:**
+   - **Agentes:** `market_research`, `competitive_intelligence`, `customer_insights`, `product_strategy`, y `omission_analyst`.
+   - **Salida Estructurada (JSON/Pydantic):** Estos agentes ya no escriben reportes narrativos extensos de 800-1000 palabras. En su lugar, devuelven exclusivamente un objeto estructurado según el esquema Pydantic `AgentFinding`.
+   - **Campos del Esquema `AgentFinding`:**
+     - `category` (string, ej: `"market"`, `"competition"`, `"customer"`, `"product"`, `"omissions"`)
+     - `score` (integer de 0 a 100)
+     - `key_points` (lista de 3 a 6 viñetas/bullets cortos en texto)
+     - `red_flags` (lista de alertas críticas o vacío si está limpio)
+     - `is_clean` (booleano que indica si el área no tiene riesgos mayores)
+
+2. **1 Agente Sintetizador (Lead Business Analyst):**
+   - Recibe las 5 tarjetas estructuradas `AgentFinding` como contexto.
+   - Genera el reporte narrativo pulido y memo final en prosa completa.
+   - **Regla de Síntesis Dinámica:** Si un especialista reporta `is_clean = true` y no tiene `red_flags`, el Business Analyst resume esa sección en un párrafo breve de 2 a 4 oraciones. Si se reportan alertas o `is_clean = false`, profundiza en detalle, logrando un balance perfecto, reducción masiva de tokens redundantes, y mayor legibilidad.
+
+3. **1 Agente de Debate (Devil's Advocate):**
+   - Recibe el memo de prosa completa y debate en contra de la recomendación de inversión para asegurar un contraste analítico robusto (sin alterar las puntuaciones originales).
+
+### Diagrama del Flujo de Agentes Rediseñado
+
+```mermaid
+graph TD
+    ScrapedContext[Datos Raspados & APIs Públicas] --> MR[Market Research specialist]
+    ScrapedContext --> CI[Competitive Intelligence analyst]
+    ScrapedContext --> CI_2[Customer Insights researcher]
+    ScrapedContext --> PS[Product Strategy advisor]
+    ScrapedContext --> OA[Omission Analyst]
+
+    MR -->|AgentFinding Pydantic| BA[Lead Business Analyst]
+    CI -->|AgentFinding Pydantic| BA
+    CI_2 -->|AgentFinding Pydantic| BA
+    PS -->|AgentFinding Pydantic| BA
+    OA -->|AgentFinding Pydantic| BA
+
+    BA -->|Memo en Prosa Completa| DA[Devil's Advocate]
+    DA -->|Debate Crítico| FinalReport[Reporte Final Unificado]
+```
+
+### ¿Cómo se implementa y visualiza la Personalización de Marca (White-Label)?
+El sistema cuenta con un portal completo de marca blanca disponible para administradores desde el panel de "Admin Moderación":
+- **Selector de Tema:** Soporta temas de color `dark`, `light` y `red` que se inyectan dinámicamente como variables y clases CSS globales en el cuerpo del documento.
+- **Nombre de Plataforma:** Personalización completa de todos los títulos, menús, metadatos y pies de página.
+- **Logotipos Personalizados:** Soporte para subida de logos. Si se configuran variables de S3, se cargan de forma segura a la nube; de lo contrario, se codifican en Base64 en la base de datos de manera robusta.
+- **Mensajes Editables:** Textos editables para mensajes de bienvenida, pantallas de espera y estados de éxito.
+
+### ¿Cómo funciona el Tracking de Tokens y Límites de Presupuesto?
+Para controlar y transparentar costos de infraestructura de IA, DealScout AI incorpora:
+- **Límites de IA (Presupuesto):**
+  - `max_tokens_per_agent_call`: Limita el número de tokens máximos que el LLM puede procesar en cada llamada individual de agente.
+  - `max_tokens_per_analysis`: Lleva un acumulador en tiempo real de tokens consumidos durante el kickoff del CrewAI y detiene la ejecución inmediatamente con un error claro de infraestructura si se supera el presupuesto.
+- **Auditoría & Analíticas en Panel:**
+  - El backend registra cada ejecución en la tabla `TokenUsageLog`.
+  - El panel de administración muestra estadísticas clave agregadas: consumo total histórico, promedio de tokens consumidos por análisis, desgloses detallados de tokens por agente (para detectar agentes ineficientes) y un historial diario del consumo en los últimos 30 días.
+
+---
+
 *Este repositorio ha sido documentado al máximo detalle para fomentar el entendimiento autónomo de agentes cognitivos y facilitar contribuciones empresariales escalables.*

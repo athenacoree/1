@@ -40,5 +40,50 @@ class TestCrewConfig(unittest.TestCase):
         self.assertIn("GDPR compliance", crew_obj.user_priorities_block)
         self.assertTrue(crew_obj.user_priorities_block.startswith("INSTRUCCIONES DE PRIORIDAD DEL USUARIO:"))
 
+    @mock.patch("vcdiligence.llm_manager.LLMProviderManager.get_llm")
+    def test_token_budget_limit_enforcement(self, mock_get_llm):
+        """Verify that max_tokens_per_analysis triggers an error if exceeded."""
+        mock_get_llm.return_value = (LLM(model="openai/gpt-4o-mini", api_key="dummy"), "openai")
+
+        crew_obj = MarketResearchCrew()
+        crew_obj.max_tokens_per_analysis = 100 # very low budget
+
+        mock_output = mock.MagicMock()
+        mock_output.raw = "dummy"
+
+        mock_agent = mock.MagicMock()
+        mock_agent._token_process.get_summary.return_value = mock.MagicMock(
+            prompt_tokens=100, completion_tokens=50, total_tokens=150
+        )
+
+        with self.assertRaises(ValueError) as context:
+            crew_obj._log_and_check_budget("market_research_specialist", mock_agent, mock_output)
+
+        self.assertIn("presupuesto de tokens", str(context.exception))
+
+    def test_agent_finding_schema_validation(self):
+        """Verify that AgentFinding Pydantic model correctly validates fields."""
+        from vcdiligence.agent_schemas import AgentFinding
+
+        finding = AgentFinding(
+            category="market",
+            score=85,
+            key_points=["Bullet 1", "Bullet 2", "Bullet 3"],
+            red_flags=[],
+            is_clean=True
+        )
+        self.assertEqual(finding.category, "market")
+        self.assertEqual(finding.score, 85)
+        self.assertTrue(finding.is_clean)
+
+        from pydantic import ValidationError
+        with self.assertRaises(ValidationError):
+            AgentFinding(
+                score=85,
+                key_points=["Bullet 1"],
+                red_flags=[],
+                is_clean=True
+            )
+
 if __name__ == "__main__":
     unittest.main()

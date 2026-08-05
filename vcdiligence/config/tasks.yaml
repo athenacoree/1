@@ -7,7 +7,7 @@ market_research_task:
 
     {user_priorities_block}
   expected_output: >
-    A structured report (800-1000 words) defining the market opportunity, sizing (TAM/SAM/SOM), sector macro trends, and regulatory considerations for the startup.
+    Entrega SOLO los hallazgos clave estructurados en un objeto que contenga la categoría (market), un score de 0 a 100, 3-6 bullets cortos (key_points) sin párrafos narrativos extensos, una lista de red_flags si existen y un booleano is_clean indicando si no se detectaron problemas relevantes. El reporte final en prosa lo genera otro agente después.
   agent: market_research_specialist
 
 competitive_intelligence_task:
@@ -18,7 +18,7 @@ competitive_intelligence_task:
 
     {user_priorities_block}
   expected_output: >
-    A detailed competitor profile and positioning matrix comparing {company_name} with at least 3-4 key industry competitors, highlighting competitive moats and market gaps.
+    Entrega SOLO los hallazgos clave estructurados en un objeto que contenga la categoría (competition), un score de 0 a 100, 3-6 bullets cortos (key_points) sin párrafos narrativos extensos, una lista de red_flags si existen y un booleano is_clean indicando si no se detectaron problemas relevantes. El reporte final en prosa lo genera otro agente después.
   agent: competitive_intelligence_analyst
 
 customer_insights_task:
@@ -29,7 +29,7 @@ customer_insights_task:
 
     {user_priorities_block}
   expected_output: >
-    A detailed customer profiles report, mapping key user pain points, purchase drivers, and estimated customer acquisition strategies.
+    Entrega SOLO los hallazgos clave estructurados en un objeto que contenga la categoría (customer), un score de 0 a 100, 3-6 bullets cortos (key_points) sin párrafos narrativos extensos, una lista de red_flags si existen y un booleano is_clean indicando si no se detectaron problemas relevantes. El reporte final en prosa lo genera otro agente después.
   agent: customer_insights_researcher
 
 product_strategy_task:
@@ -40,7 +40,7 @@ product_strategy_task:
 
     {user_priorities_block}
   expected_output: >
-    A technical and product strategy assessment outlining feature prioritization, technological risks, and scalability milestones.
+    Entrega SOLO los hallazgos clave estructurados en un objeto que contenga la categoría (product), un score de 0 a 100, 3-6 bullets cortos (key_points) sin párrafos narrativos extensos, una lista de red_flags si existen y un booleano is_clean indicando si no se detectaron problemas relevantes. El reporte final en prosa lo genera otro agente después.
   agent: product_strategy_advisor
 
 omission_analyst_task:
@@ -51,21 +51,19 @@ omission_analyst_task:
 
     Calculate and analyze the density of vague language/superlatives (e.g. "revolutionary", "game-changing", "market leader", "world-class") compared to the density of concrete figures and metrics.
 
-    Format your findings under a new section titled "Señales por Ausencia" (Signals by Absence).
-    For each omission, explain:
-    1. What is missing.
-    2. Why it matters for this sector/stage.
-    3. State clearly that this is a signal to investigate, not a definitive conclusion.
-
     {user_priorities_block}
   expected_output: >
-    A detailed section "Señales por Ausencia" listing detected omissions, their significance, language vagueness vs concrete metrics analysis, and a clear warning note.
+    Entrega SOLO los hallazgos clave estructurados en un objeto que contenga la categoría (omissions), un score de 0 a 100, 3-6 bullets cortos (key_points) sin párrafos narrativos extensos, una lista de red_flags si existen y un booleano is_clean indicando si no se detectaron problemas de omisiones relevantes. El reporte final en prosa lo genera otro agente después.
   agent: omission_analyst
 
 business_analyst_task:
   description: >
     Synthesize all prior reports into a professional VC Due Diligence Investment Memo for {company_name}.
     Use the team/founders research insights: {team_and_founders_insights} to evaluate the leadership.
+
+    You will receive the structured AgentFinding outputs from the prior specialist tasks (Market Research, Competitive Intelligence, Customer Insights, Product Strategy, and Omission Analyst).
+    Your instruction is: Sintetiza estos hallazgos estructurados en un memo profesional en prosa. Para cada sección (Market, Competition, Team, Product, Financials/Pricing, y Señales por Ausencia), si el hallazgo correspondiente de la sección tiene is_clean=True y red_flags vacío, escribe un párrafo breve (2-4 frases) confirmando que no se detectaron problemas. Si hay red_flags o hallazgos relevantes (is_clean=False o key_points), profundiza esa sección con más detalle en prosa.
+
     Your report MUST start with exactly three distinct lines at the very top for UI parsing:
     "INVESTMENT_SCORE: [0-100]"
     "RECOMMENDATION: [GO / CONDITIONAL / NO-GO]"
@@ -76,7 +74,7 @@ business_analyst_task:
     - Investment Thesis & Core Strengths
     - Risk Scoring Explanation (explain why the overall score and sub-scores are given, referencing the sub-scores)
     - Deep Dive: Market, Competition, Team, Product, Financials/Pricing
-    - Señales por Ausencia (synthesize the Omission Analyst's entire section here)
+    - Señales por Ausencia (synthesize the Omission Analyst's findings and list of omissions here)
     - Risk Mitigation Framework
     - Final Actionable Recommendation
 

@@ -271,11 +271,27 @@ class PaymentTransaction(Base):
     user = relationship("User")
     plan = relationship("PricingPlan")
 
+class TokenUsageLog(Base):
+    __tablename__ = "token_usage_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(String, ForeignKey("tasks.id"), nullable=True)
+    agent_name = Column(String, nullable=False)
+    provider = Column(String, nullable=False)
+    model_name = Column(String, nullable=False)
+    prompt_tokens = Column(Integer, default=0, nullable=False)
+    completion_tokens = Column(Integer, default=0, nullable=False)
+    total_tokens = Column(Integer, default=0, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
 class SystemConfig(Base):
     __tablename__ = "system_configs"
 
     key = Column(String, primary_key=True, index=True)
     value = Column(String, nullable=False)
+    value_type = Column(String, default="string", nullable=False) # "string", "int", "bool"
+    category = Column(String, default="general", nullable=False) # "branding", "llm_budget", "general", "payments"
+    description = Column(String, default="", nullable=False)
 
 def init_db():
     Base.metadata.create_all(bind=engine)

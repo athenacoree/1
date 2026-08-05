@@ -186,7 +186,8 @@ def run_due_diligence_task(
             task_callback=task_callback,
             user_priorities=user_priorities,
             custom_focus_keywords=custom_focus_keywords,
-            db_session=db
+            db_session=db,
+            task_id=f"{org_id}_{domain}"
         )
 
         # Merge business analyst memo and devils advocate section

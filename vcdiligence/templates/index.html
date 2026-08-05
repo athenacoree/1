@@ -20,11 +20,33 @@
         }
     </script>
     <style>
+        /* Dynamic Theme Variables */
+        :root, .theme-dark {
+            --bg-color: #030712;
+            --gradient-1: rgba(6, 182, 212, 0.15); /* cyan */
+            --gradient-2: rgba(16, 185, 129, 0.12); /* emerald */
+            --theme-text: #22d3ee;
+        }
+
+        .theme-light {
+            --bg-color: #f8fafc; /* slate-50 */
+            --gradient-1: rgba(14, 165, 233, 0.15); /* sky */
+            --gradient-2: rgba(59, 130, 246, 0.12); /* blue */
+            --theme-text: #0284c7;
+        }
+
+        .theme-red {
+            --bg-color: #050101; /* black-red */
+            --gradient-1: rgba(239, 68, 68, 0.18); /* red-500 */
+            --gradient-2: rgba(153, 27, 27, 0.15); /* red-800 */
+            --theme-text: #ef4444;
+        }
+
         body {
-            background-color: #030712;
+            background-color: var(--bg-color) !important;
             background-image:
-                radial-gradient(at 0% 0%, rgba(6, 182, 212, 0.15) 0, transparent 50%),
-                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.12) 0, transparent 50%);
+                radial-gradient(at 0% 0%, var(--gradient-1) 0, transparent 50%),
+                radial-gradient(at 100% 100%, var(--gradient-2) 0, transparent 50%) !important;
             background-attachment: fixed;
         }
         .glass {
@@ -42,10 +64,20 @@
         }
     </style>
 </head>
-<body class="text-slate-100 min-h-screen flex flex-col font-sans selection:bg-cyan-500 selection:text-slate-900" x-data="{
+<body class="text-slate-100 min-h-screen flex flex-col font-sans selection:bg-cyan-500 selection:text-slate-900" :class="'theme-' + branding.theme_color" x-data="{
     token: localStorage.getItem('token') || '',
     user: null,
+    branding: {
+        platform_name: 'DealScout AI',
+        theme_color: 'dark',
+        logo_url: '',
+        welcome_message: 'Bienvenido a DealScout AI',
+        analysis_loading_message: 'Analizando la startup, por favor espera...',
+        analysis_complete_message: '¡Análisis completado con éxito!',
+        footer_message: 'DealScout AI - Venture Capital Due Diligence'
+    },
     reports: [],
+    tokenUsageData: null,
     showComparison: false,
     showSettings: false,
     settingsName: '',
@@ -153,7 +185,23 @@
     errorMessage: '',
     pollInterval: null,
 
+    async loadBranding() {
+        try {
+            const res = await fetch('/branding');
+            if (res.ok) {
+                this.branding = await res.json();
+                if (this.branding && this.branding.platform_name) {
+                    document.title = this.branding.platform_name + ' — Enterprise VC Due Diligence & Validación';
+                }
+            }
+        } catch (err) {
+            console.error('Failed to load branding', err);
+        }
+    },
+
     async init() {
+        // Load public branding first
+        await this.loadBranding();
         // Load Public Stats
         await this.loadPublicStats();
         // Load Testimonials
@@ -456,6 +504,7 @@
             await this.loadAdminListings();
             await this.loadAdminApiKeys();
             await this.loadAdminPricingPlans();
+            await this.loadTokenUsage();
         } catch (err) {
             console.error('Failed to load admin data', err);
         }
@@ -1079,6 +1128,64 @@
         } catch (err) {
             alert(err.message);
         }
+    },
+
+    async saveBrandingField(key, value) {
+        try {
+            const formData = new FormData();
+            formData.append('key', key);
+            formData.append('value', value);
+            const res = await fetch('/admin/config', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token },
+                body: formData
+            });
+            if (res.ok) {
+                await this.loadBranding();
+            } else {
+                const data = await res.json();
+                throw new Error(data.detail || 'Error al guardar configuración');
+            }
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    async uploadBrandingLogo(file) {
+        if (!file) return;
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch('/admin/branding/logo', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token },
+                body: formData
+            });
+            if (res.ok) {
+                const data = await res.json();
+                this.branding.logo_url = data.logo_url;
+                alert('Logo de marca subido correctamente.');
+                await this.loadBranding();
+            } else {
+                const data = await res.json();
+                throw new Error(data.detail || 'Error al subir el logo');
+            }
+        } catch (err) {
+            alert(err.message);
+        }
+    },
+
+    async loadTokenUsage() {
+        try {
+            const res = await fetch('/admin/token-usage', {
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            if (res.ok) {
+                this.tokenUsageData = await res.json();
+            }
+        } catch (err) {
+            console.error('Failed to load token usage stats', err);
+        }
     }
 }">
 
@@ -1093,11 +1200,16 @@
     <!-- Header -->
     <header class="w-full max-w-6xl mx-auto px-6 py-6 flex justify-between items-center z-10">
         <div class="flex items-center space-x-3">
-            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-emerald-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
-                <span class="text-slate-950 font-bold text-xl tracking-tighter">DS</span>
-            </div>
+            <template x-if="branding.logo_url">
+                <img :src="branding.logo_url" class="h-10 w-auto rounded-xl object-contain shadow-lg" />
+            </template>
+            <template x-if="!branding.logo_url">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-emerald-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                    <span class="text-slate-950 font-bold text-xl tracking-tighter" x-text="(branding.platform_name || 'DS').split(' ').map(w => w[0]).join('').substring(0,2).toUpperCase()"></span>
+                </div>
+            </template>
             <div>
-                <h1 class="font-bold text-lg tracking-tight bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent" x-text="user ? settingsName : 'DealScout AI'"></h1>
+                <h1 class="font-bold text-lg tracking-tight bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent" x-text="branding.platform_name || 'DealScout AI'"></h1>
                 <p class="text-xs text-slate-400">Enterprise Due Diligence Platform</p>
             </div>
         </div>
@@ -1248,8 +1360,8 @@
             <div class="w-full mb-8">
                 <div class="p-5 rounded-2xl bg-cyan-950/20 border border-cyan-900/50 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
                     <div>
-                        <span class="text-[10px] font-bold uppercase tracking-widest bg-cyan-400/20 text-cyan-400 px-2.5 py-1 rounded-full">Fase de Validación Temprana</span>
-                        <h3 class="text-white font-bold text-md mt-2">Bienvenido a la versión preliminar de DealScout AI</h3>
+                        <span class="text-[10px] font-bold uppercase tracking-widest bg-cyan-400/20 text-cyan-400 px-2.5 py-1 rounded-full" x-text="branding.platform_name || 'DealScout AI'"></span>
+                        <h3 class="text-white font-bold text-md mt-2" x-text="branding.welcome_message || 'Bienvenido a la versión preliminar de DealScout AI'"></h3>
                         <p class="text-slate-400 text-xs mt-1">Estamos activamente optimizando nuestros agentes. Nuevas herramientas de automatización de reportes se integrarán próximamente de forma automática.</p>
                     </div>
                 </div>
@@ -1567,7 +1679,7 @@
                                 </svg>
                                 <div class="absolute inset-0 flex items-center justify-center font-bold text-sm text-slate-400" x-text="progressPercent + '%'"></div>
                             </div>
-                            <h3 class="text-xl font-bold mb-2 bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">Analizando Startup</h3>
+                            <h3 class="text-xl font-bold mb-2 bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent" x-text="branding.analysis_loading_message || 'Analizando Startup'"></h3>
                             <p class="text-slate-400 text-sm mb-6" x-text="statusMessage"></p>
                             <div class="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
                                 <div class="bg-gradient-to-r from-cyan-500 to-emerald-500 h-full transition-all duration-500" :style="'width: ' + progressPercent + '%'"></div>
@@ -1576,6 +1688,14 @@
 
                         <!-- Results Dashboard -->
                         <div class="space-y-6" x-show="showResult && resultData" style="display: none;">
+                            <!-- Success Banner -->
+                            <div class="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-900/50 text-emerald-400 text-sm font-semibold flex items-center gap-2" x-show="showResult && resultData">
+                                <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                <span x-text="branding.analysis_complete_message || '¡Análisis completado con éxito!'"></span>
+                            </div>
+
                             <div class="glass-premium p-6 rounded-3xl relative overflow-hidden">
                                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                                     <div>
@@ -2236,6 +2356,169 @@
                     </div>
                 </div>
 
+                <!-- Section C: Personalización de Marca (Branding) -->
+                <div class="p-6 bg-slate-900/40 border border-slate-800 rounded-2xl">
+                    <h4 class="text-sm font-bold text-cyan-400 uppercase tracking-wider mb-3">Personalización de Marca & Mensajes</h4>
+
+                    <div class="space-y-4">
+                        <!-- Platform Name -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Nombre de la Plataforma</label>
+                                <div class="flex gap-2">
+                                    <input type="text" x-model="branding.platform_name" class="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-300 outline-none text-xs">
+                                    <button @click="saveBrandingField('platform_name', branding.platform_name)" class="px-3 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg text-xs">Guardar</button>
+                                </div>
+                            </div>
+
+                            <!-- Theme Color -->
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Tema de Color Global</label>
+                                <div class="flex gap-2">
+                                    <select x-model="branding.theme_color" @change="saveBrandingField('theme_color', $event.target.value)" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-300 outline-none text-xs">
+                                        <option value="dark">Dark Theme</option>
+                                        <option value="light">Light Theme</option>
+                                        <option value="red">Red Theme</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Brand Logo upload -->
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Logo de la Marca (Imagen PNG/JPG/SVG, máx 2MB)</label>
+                            <input type="file" @change="uploadBrandingLogo($event.target.files[0])" class="w-full text-xs text-slate-400">
+                            <p class="text-[10px] text-slate-500 mt-1">Si S3 está configurado se guardará ahí, de lo contrario se almacenará codificado en Base64.</p>
+                            <template x-if="branding.logo_url">
+                                <div class="mt-2 flex items-center gap-2">
+                                    <span class="text-[10px] text-slate-400">Logo Actual:</span>
+                                    <img :src="branding.logo_url" class="h-8 object-contain rounded-lg border border-slate-800" />
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Welcome & Analysis messages -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Mensaje de Bienvenida (Landing/Login)</label>
+                                <div class="flex gap-2">
+                                    <textarea x-model="branding.welcome_message" rows="2" class="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-300 outline-none text-xs"></textarea>
+                                    <button @click="saveBrandingField('welcome_message', branding.welcome_message)" class="px-3 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg text-xs self-end">Guardar</button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Mensaje de Carga (Durante el Análisis)</label>
+                                <div class="flex gap-2">
+                                    <textarea x-model="branding.analysis_loading_message" rows="2" class="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-300 outline-none text-xs"></textarea>
+                                    <button @click="saveBrandingField('analysis_loading_message', branding.analysis_loading_message)" class="px-3 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg text-xs self-end">Guardar</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Mensaje de Éxito (Al completar el Análisis)</label>
+                                <div class="flex gap-2">
+                                    <textarea x-model="branding.analysis_complete_message" rows="2" class="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-300 outline-none text-xs"></textarea>
+                                    <button @click="saveBrandingField('analysis_complete_message', branding.analysis_complete_message)" class="px-3 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg text-xs self-end">Guardar</button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Mensaje de Pie de Página (Footer)</label>
+                                <div class="flex gap-2">
+                                    <textarea x-model="branding.footer_message" rows="2" class="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-300 outline-none text-xs"></textarea>
+                                    <button @click="saveBrandingField('footer_message', branding.footer_message)" class="px-3 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg text-xs self-end">Guardar</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- LLM Budget Limits -->
+                        <div class="border-t border-slate-800/60 pt-4">
+                            <h5 class="text-xs font-bold text-slate-300 mb-3 uppercase tracking-wide">Límites de Consumo de Tokens (Presupuesto de IA)</h5>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Tokens Máximos por Análisis completo (0 = sin límite)</label>
+                                    <div class="flex gap-2">
+                                        <input type="number" :value="branding.max_tokens_per_analysis || 0" @change="branding.max_tokens_per_analysis = $event.target.value; saveBrandingField('max_tokens_per_analysis', $event.target.value)" class="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-300 outline-none text-xs">
+                                        <button @click="saveBrandingField('max_tokens_per_analysis', branding.max_tokens_per_analysis || 0)" class="px-3 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg text-xs">Actualizar</button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Tokens Máximos por llamada de Agente (0 = sin límite)</label>
+                                    <div class="flex gap-2">
+                                        <input type="number" :value="branding.max_tokens_per_agent_call || 0" @change="branding.max_tokens_per_agent_call = $event.target.value; saveBrandingField('max_tokens_per_agent_call', $event.target.value)" class="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-300 outline-none text-xs">
+                                        <button @click="saveBrandingField('max_tokens_per_agent_call', branding.max_tokens_per_agent_call || 0)" class="px-3 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg text-xs">Actualizar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section D: Reporte de Consumo de Tokens (IA) -->
+                <div class="p-6 bg-slate-900/40 border border-slate-800 rounded-2xl">
+                    <h4 class="text-sm font-bold text-yellow-400 uppercase tracking-wider mb-3">Consumo de Tokens de Inteligencia Artificial</h4>
+
+                    <template x-if="tokenUsageData">
+                        <div class="space-y-6">
+                            <!-- Metrics summary -->
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-center">
+                                    <span class="text-slate-500 block text-[9px] uppercase font-bold tracking-wider">Consumo Total de Tokens</span>
+                                    <span class="text-xl font-black text-white" x-text="tokenUsageData.total_tokens.toLocaleString()"></span>
+                                </div>
+                                <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-center">
+                                    <span class="text-slate-500 block text-[9px] uppercase font-bold tracking-wider">Consumo Promedio por Análisis</span>
+                                    <span class="text-xl font-black text-cyan-400" x-text="tokenUsageData.avg_per_analysis.toLocaleString()"></span>
+                                </div>
+                                <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-center">
+                                    <span class="text-slate-500 block text-[9px] uppercase font-bold tracking-wider">Límites Activos (Análisis / Llamada)</span>
+                                    <span class="text-xs font-bold text-slate-300" x-text="(branding.max_tokens_per_analysis || 'Sin límite') + ' / ' + (branding.max_tokens_per_agent_call || 'Sin límite')"></span>
+                                </div>
+                            </div>
+
+                            <!-- Agent breakdown -->
+                            <div>
+                                <h5 class="text-xs font-bold text-slate-300 mb-2 uppercase tracking-wide">Desglose de Consumo por Agente</h5>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                    <template x-for="item in tokenUsageData.agent_breakdown" :key="item.agent">
+                                        <div class="bg-slate-950 p-3 rounded-lg border border-slate-800/80 flex justify-between items-center">
+                                            <span class="text-slate-400 font-medium capitalize" x-text="item.agent.replace(/_/g, ' ')"></span>
+                                            <span class="font-bold text-emerald-400" x-text="item.tokens.toLocaleString()"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- Daily Usage table -->
+                            <div>
+                                <h5 class="text-xs font-bold text-slate-300 mb-2 uppercase tracking-wide">Historial de Consumo Diario (Últimos 30 días)</h5>
+                                <div class="overflow-x-auto max-h-48 overflow-y-auto">
+                                    <table class="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr class="border-b border-slate-800 text-slate-500 text-[10px]">
+                                                <th class="py-1 px-3">Fecha</th>
+                                                <th class="py-1 px-3 text-right">Tokens Consumidos</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="row in tokenUsageData.daily_usage" :key="row.date">
+                                                <tr class="border-b border-slate-800/40 hover:bg-slate-800/20 text-[11px]" x-show="row.tokens > 0">
+                                                    <td class="py-1.5 px-3 text-slate-400" x-text="row.date"></td>
+                                                    <td class="py-1.5 px-3 text-right text-slate-200 font-mono font-bold" x-text="row.tokens.toLocaleString()"></td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    <template x-if="!tokenUsageData">
+                        <p class="text-slate-500 italic text-center py-4">No hay datos de consumo registrados aún.</p>
+                    </template>
+                </div>
+
             </div>
         </div>
     </div>
@@ -2442,7 +2725,7 @@
     <footer class="w-full border-t border-slate-900 bg-slate-950/80 backdrop-blur-md py-6 text-center z-10 text-xs text-slate-500 mt-12">
         <div class="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center gap-4">
             <div class="text-left space-y-1">
-                <div>&copy; 2026 DealScout AI. All rights reserved. Enterprise Venture Intelligence.</div>
+                <div>&copy; 2026 <span x-text="branding.platform_name || 'DealScout AI'"></span>. All rights reserved. <span x-text="branding.footer_message || 'Enterprise Venture Intelligence.'"></span></div>
                 <div class="text-[10px] text-slate-600">This platform is built upon a MIT licensed clone of SURESHBEEKHANI/CrewAI-End-to-End with enterprise improvements.</div>
             </div>
             <div class="flex items-center space-x-6">
