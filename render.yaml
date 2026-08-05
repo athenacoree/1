@@ -3,8 +3,8 @@ services:
     name: dealscout-ai
     env: python
     plan: free
-    buildCommand: "poetry install && poetry run playwright install chromium"
-    startCommand: "poetry run alembic upgrade head && poetry run python -m vcdiligence.app"
+    buildCommand: pip install --upgrade pip && pip install -e . && playwright install --with-deps chromium
+    startCommand: "alembic upgrade head && python -m vcdiligence.app"
     autoDeploy: false
     envVars:
       - key: DATABASE_URL
