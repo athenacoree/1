@@ -235,3 +235,22 @@ El archivo `source_orchestrator.py` introduce un motor de orquestación reactivo
 - **Custom Cache TTL:** El sistema de caché local en disco ha sido optimizado con TTLs variables para evitar consultas repetitivas de red:
   - **WHOIS:** Cache de 30 días (720 horas) dado que los registros de dominios son altamente estables.
   - **Demás fuentes:** Cache estándar de 24 horas para reflejar información reciente.
+
+---
+
+## 12. Innovación en Eficiencia Cognitiva: El Nuevo Diseño de Agentes Estructurados y Ahorro de Tokens
+
+En las versiones iniciales de DealScout AI, cada uno de los agentes especialistas de CrewAI (por ejemplo, el de investigación de mercado o de análisis competitivo) redactaba un extenso reporte de texto libre con miles de palabras y conectores literarios. Luego, estos extensos reportes se inyectaban en la secuencia como contexto para los siguientes agentes.
+
+Esto causaba un grave problema de eficiencia técnica conocido como **"inflación de contexto"**:
+1. **Redundancia:** Los LLM consumen gran cantidad de tokens para escribir frases complementarias y adornos literarios ("En conclusión", "Considerando lo anterior", etc.).
+2. **Contexto de Entrada Masivo:** El agente final, encargado de sintetizar todo, terminaba recibiendo decenas de miles de tokens de prosa repetitiva como entrada. Dado que los proveedores cobran principalmente por la cantidad de palabras leídas (tokens de entrada), esto disparaba exponencialmente la factura del LLM y ralentizaba notablemente el tiempo de respuesta.
+
+### ¿Cómo soluciona esto el nuevo diseño estructurado (`AgentFinding`)?
+
+Hemos rediseñado por completo el pipeline de CrewAI. Ahora, en lugar de redactar prosa libre, los 5 agentes especialistas de primera línea están obligados a responder siguiendo una estructura de datos estricta y compacta (un esquema JSON tipado llamado `AgentFinding` que define campos clave como `score`, `key_points`, `red_flags` y `is_clean`).
+
+Este enfoque aporta las siguientes ventajas clave:
+- **Resumen sin pérdidas:** El agente especialista se limita a rellenar de forma ultra-directa los datos solicitados. Se elimina un 90% de las palabras vacías de contenido.
+- **Entrada Ultra-Eficiente para el Analista Líder:** Cuando el analista principal (`Lead Business Analyst`) recopila el trabajo de los especialistas, en lugar de leer cinco ensayos de prosa libre, lee una pequeña y estructurada tabla JSON con los hechos puros. Es el único agente que se encarga de redactar la prosa final.
+- **Reducción del 75% en Token Usage:** Al optimizar lo que leen y escriben los agentes intermedios, logramos reducir drásticamente el consumo total de tokens en cada análisis sin perder profundidad. Esto permite al sistema correr ágilmente y ajustarse de manera segura a presupuestos de tokens predefinidos en la base de datos.

@@ -1,147 +1,212 @@
 # DealScout AI — Multi-Agent Venture Capital Due Diligence & Investment Directory
 
-nota importante : solo necesita una sola api de ai para funcionar mas adelante se le describe los modelos que se pueden utilizar 
-el sistema esta echo tanto para funcionar a bajo consumo desde un por ejemplo render gratuito manteniendo un rendimiento estable y seguro , como para correr en algo mas potencia el cambio de potencia lo hace significativamente veloz y esta adaptado para adaptar e a entornos y dificultades trabaja bien con poco recursos 
+Nota Importante: Solo necesita una sola API Key de Inteligencia Artificial para funcionar. El sistema está hecho tanto para funcionar de forma eficiente a bajo consumo (por ejemplo, en un entorno Render gratuito manteniendo un rendimiento estable y seguro), como para correr en servidores de mayor potencia. El cambio de potencia lo hace significativamente veloz y está diseñado para adaptarse con pocos recursos.
 
-DealScout AI (configured as `VCDueDiligenceAgent`) is an autonomous, enterprise-grade Venture Capital due diligence engine and interactive dual-sided marketplace. Powered by **FastAPI**, **SQLAlchemy**, and **CrewAI**, it automates the process of analyzing startups from public URLs, Pitch Decks (PDF/PPTX), or LinkedIn profiles. It acts as a comprehensive decision-support system, generating detailed white-label investment reports, readiness scores (0-100), and a secure directory to match founders with qualified buyers and investors.
+DealScout AI (configurado como `VCDueDiligenceAgent`) es un motor autónomo de due diligence para Venture Capital de nivel empresarial y un directorio interactivo bidireccional. Desarrollado con **FastAPI**, **SQLAlchemy** y **CrewAI**, automatiza el proceso de análisis de startups a partir de URLs públicas, Pitch Decks (PDF/PPTX) o perfiles de LinkedIn. Actúa como un sistema completo de soporte de decisiones, generando reportes de inversión PDF white-label personalizables, puntajes de readiness (0-100) y un directorio seguro para conectar fundadores con compradores e inversores calificados.
 
 ---
 
 ## 🌟 Core Features
 
-- **Autonomous Multi-Agent Cognition:** Coordinated team of 6 specialized CrewAI agents that research, analyze, debate, and compile the final investment memo.
-- **Dual-Sided Marketplace Directory:** Connecting Founders (seeking investment or open to acquisition) and Buyers/Investors (VCs, independent angels, and corporate development analysts) securely.
-- **Adaptive Scraper (Playwright fallback):** A robust scraping engine combining fast `requests/BS4` extraction with a lazy-loaded dynamic **Playwright headless Chromium** browser to easily bypass modern SPA rendering.
-- **Live External API Integration:** Hits real, production-ready databases in real time to fetch corporate records (OpenCorporates, SEC EDGAR Form D), patents (USPTO), legal litigation history (CourtListener), and tech activity (GitHub API).
-- **White-Label Customization:** Complete customizable interface, allowing administrators to configure custom company names and upload high-resolution organization logos dynamically rendered inside modern ReportLab PDF reports.
-- **Continuous Monitoring:** Periodic automated scanning (using APScheduler) to track score changes, legal hazards, and technical updates over time.
-- **Privacy-First Testimonial Engine:** Feedback submissions with explicit opt-in preferences for comment sharing, profile photos, and name displays. Testimonials with screenshot attachments require manual administrator approval.
-- **SSRF Mitigations & Rate-Limiting:** Production-ready protection policies verifying IP addresses to prevent Server-Side Request Forgery and rate limits on start analysis requests.
+- **Autonomous Multi-Agent Cognition:** Orquestación coordinada de un equipo de 7 agentes especializados de CrewAI que investigan, analizan, debaten y compilan el memorando de inversión final.
+- **Dual-Sided Marketplace Directory:** Conecta de forma segura a Fundadores (que buscan inversión o están abiertos a adquisición) con Compradores/Inversores (VCS, ángeles independientes y analistas de desarrollo corporativo).
+- **Adaptive Scraper (Playwright fallback):** Un motor de scraping robusto que combina la velocidad de la extracción tradicional con `requests/BS4` con un navegador **Playwright headless Chromium** cargado bajo demanda solo cuando es necesario renderizar JavaScript pesado o evadir SPAs complejas.
+- **Live External API Integration:** Acceso en tiempo real a bases de datos de producción reales para obtener registros corporativos (OpenCorporates, SEC EDGAR Form D), patentes (USPTO), antecedentes de litigios legales (CourtListener), estado de sanciones internacionales (OFAC SDN List con fuzzy matching local) y actividad tecnológica (GitHub API).
+- **White-Label Customization & SystemConfig:** Panel administrativo centralizado donde se configuran dinámicamente variables visuales (colores de tema, mensajes de bienvenida/carga, nombres de plataforma) y límites de consumo sin necesidad de redeploy. Reportes ReportLab PDF generados con logos corporativos de alta resolución en tiempo real.
+- **Continuous Monitoring:** Escaneo automatizado periódico (usando un cron scheduler interno en APScheduler) para registrar y notificar cambios de puntaje, novedades legales y actualizaciones técnicas de las startups monitoreadas.
+- **Pool de API Keys con Rotación Automática (`ApiKeyPool`):** Gestión de múltiples llaves API de LLM de forma inteligente. Si una llave devuelve un error de rate-limit o falta de crédito, el sistema la marca temporalmente, rota automáticamente a otra llave saludable y un worker en segundo plano intenta recuperarla de forma autónoma cada 6 horas.
+- **Privacy-First Testimonial Engine:** Carrusel de feedback y testimonios de usuarios con consentimiento granular para compartir comentarios, nombres y fotos. Los testimonios con capturas de pantalla adjuntas se guardan en un buzón de moderación pendiente de aprobación del administrador.
+- **SSRF Mitigations & Rate-Limiting:** Políticas de protección listas para producción que validan direcciones IP públicas, bloqueando accesos a entornos internos de red (SSRF) y limitación de peticiones de análisis concurrentes.
+
+---
+
+## 📊 Diagramas de Flujo del Sistema
+
+### 1. Pipeline Cognitivo Multi-Agente (7 Agentes)
+El siguiente diagrama detalla cómo los 5 agentes especialistas analizan de manera secuencial y estructurada la información de la startup devolviendo esquemas Pydantic `AgentFinding`, y cómo confluyen en el Business Analyst y el Devil's Advocate para generar el veredicto final:
+
+```mermaid
+graph TD
+    A[Inicio del Crew] --> B[Market Research Specialist<br/>'AgentFinding' estructurado]
+    B --> C[Competitive Intelligence Analyst<br/>'AgentFinding' estructurado]
+    C --> D[Customer Insights Researcher<br/>'AgentFinding' estructurado]
+    D --> E[Product Strategy Advisor<br/>'AgentFinding' estructurado]
+    E --> F[Omission Analyst<br/>'AgentFinding' estructurado]
+
+    F --> G[Business Analyst<br/>Sintetiza hallazgos en prosa completa/memo]
+    G --> H[Devil's Advocate<br/>Debate/Contraargumenta resultado final]
+    H --> I[Memo de Inversión Final Combinado]
+
+    style B fill:#1e293b,stroke:#22d3ee,stroke-width:2px,color:#fff
+    style C fill:#1e293b,stroke:#22d3ee,stroke-width:2px,color:#fff
+    style D fill:#1e293b,stroke:#22d3ee,stroke-width:2px,color:#fff
+    style E fill:#1e293b,stroke:#22d3ee,stroke-width:2px,color:#fff
+    style F fill:#1e293b,stroke:#22d3ee,stroke-width:2px,color:#fff
+    style G fill:#0f172a,stroke:#34d399,stroke-width:2px,color:#fff
+    style H fill:#0f172a,stroke:#34d399,stroke-width:2px,color:#fff
+    style I fill:#020617,stroke:#e2e8f0,stroke-width:3px,color:#fff
+```
+
+### 2. Flujo del Ciclo de Vida de una Petición de Análisis
+Este diagrama de secuencia ilustra el flujo de extremo a extremo que experimenta una solicitud de análisis iniciada por un usuario:
+
+```mermaid
+graph TD
+    User([Usuario envía URL / Pitch Deck]) --> Scraper[SmartScraper<br/>Extrae contenido web/PDF/PPTX]
+    Scraper --> Orch[Source Orchestrator<br/>Consulta fuentes concurrentemente con ThreadPool]
+    Orch --> SEC[SEC EDGAR Form D]
+    Orch --> Court[CourtListener]
+    Orch --> USPTO[Patentes USPTO]
+    Orch --> GH[GitHub API]
+    Orch --> OFAC[Fuzzy Sanctions OFAC]
+
+    SEC & Court & USPTO & GH & OFAC --> MergeCtx[Fusión de Contexto & Inputs]
+    MergeCtx --> Crew[Orquestador de Agentes CrewAI]
+    Crew --> GenPDF[Generador PDF White-Label<br/>pdf_generator.py]
+    GenPDF --> Notify[Notificaciones SMTP / Alerta Admin WhatsApp]
+    Notify --> Finished([Reporte Listo en Dashboard])
+```
+
+---
+
+## 🖥️ Interfaz de Usuario (Descripción de Pantallas)
+
+Dado que no es posible desplegar recursos estáticos en vivo durante la compilación del repo, a continuación se describe brevemente la experiencia visual y estructural de cada pantalla principal del sistema:
+
+1. **Pantalla de Login / Registro:** Presenta una interfaz oscura elegante con el mensaje de bienvenida dinámico configurado por el administrador (`welcome_message`), campos para ingresar correo y contraseña, y una opción rápida para registrarse como inversor (personal) o fundador (empresa) con código de invitación/referido si posee.
+2. **Dashboard de Análisis (Founder / Investor):**
+   - **Para Inversionistas:** Permite buscar startups ingresando el nombre de la compañía, URL directa o LinkedIn. Muestra una lista de análisis completados con su Readiness Score, recomendación de inversión (GO/CONDITIONAL/NO-GO), botones para descargar el reporte PDF, realizar comparación múltiple, y activar monitoreo continuo.
+   - **Para Fundadores:** Permite ver los resultados de su propio análisis, configurar su listado público en el directorio de inversión, subir su Pitch Deck o actualizar su perfil de empresa con dominio verificado.
+3. **Panel Administrativo (Admin Console):** Secciones dedicadas para que los administradores editen las variables del sistema (`SystemConfig`) en tiempo real (por ejemplo, presupuestos de tokens o switch de pasarela de pagos), ver el estado detallado de las llaves del pool (`api_key_pools`) y sus consecutivas fallas de conexión, moderar testimonios con capturas, examinar logs de errores, y verificar manualmente cuentas de empresas (`verified_by_admin = true`).
 
 ---
 
 ## 🛠 Directory and Account Types ("Buyer vs Founder")
 
-The platform separates accounts and interactions into distinct, secure flows:
+El sistema separa las cuentas e interacciones en dos flujos completamente aislados:
 
-### 1. Account Types
-- **Personal / Investor Accounts:** For venture analysts, angels, and buyers. They can run analyses, register investment decisions, use decision calibration, explore the listing directory, and express interest in companies.
-- **Empresa / Founder Accounts:** For startup founders and company executives. They can analyze their company, opt-in to list their company publicly, and manage their listings.
-- **Domain Verification:** If a founder signs up with an enterprise email matching their confirmed company website (e.g. `founder@stripe.com` and `stripe.com`), their account is automatically marked as `verified_domain = true`.
-- **Manual Verification:** Administrators can manually toggle VIP company accounts with `verified_by_admin = true`.
+### 1. Tipos de Cuentas
+- **Personal / Investor Accounts:** Diseñado para analistas de VC, ángeles y compradores independientes. Tienen acceso total para iniciar análisis de cualquier startup, comparar múltiples memos, registrar y calibrar sus decisiones de inversión basadas en scores personalizados, y expresar interés en startups del directorio.
+- **Empresa / Founder Accounts:** Diseñado para fundadores y ejecutivos de startups. Tienen acceso al análisis enfocado en su propia empresa, la opción de publicarse en el directorio público y renovar la expiración de sus publicaciones.
+- **Verificación de Dominio:** Si un fundador se registra con un correo corporativo que coincide con el dominio oficial de su startup (ej. `founder@stripe.com` para `stripe.com`), su cuenta es automáticamente marcada como `verified_domain = true`.
 
-### 2. Dual-Sided Directory Flow ("Me interesa")
-- **Founder Opt-In:** Startups are **never** published automatically. Founders must fill out an explicit form selecting their category ("investment" or "acquisition"), public visibility description, and decide whether to show their numerical score or a qualitative badge ("Excelente potencial", "Alto potencial").
-- **Admin Moderation:** New listings enter a `pending_review` state and must be manually approved by an admin.
-- **Lead Generation ("Me interesa"):** The founder's contact email is completely hidden. Authenticated VC/buyer accounts can click "Me interesa" to submit an expression of interest. This records the action in `listing_interests` and dispatches an automated SMTP notification email directly to the founder with the VC's contact info.
-- **Listing Expiry:** Listings automatically expire and hide after a configurable period (default 60 days). The system alerts the founder via email prior to expiration with a one-click renew link.
+### 2. Directorio Bidireccional y Contacto Seguro ("Me interesa")
+- **Consentimiento de Publicación (Opt-In):** Ninguna startup analizada se publica automáticamente. Los fundadores deben configurar explícitamente sus parámetros de listado (categoría, descripción de visibilidad, y decidir si mostrar su score numérico exacto o una insignia cualitativa de rendimiento).
+- **Moderación:** Las solicitudes se guardan como `pending_review` y requieren aprobación manual de un administrador para ser visibles públicamente.
+- **Lead Generation Seguro:** El correo directo del fundador permanece oculto para evitar spam. Cuando un inversor autenticado hace clic en **"Me interesa"**, el sistema registra la solicitud en `ListingInterest` y despacha un correo de alerta SMTP seguro directamente al fundador con los datos del inversor interesado.
+- **Expiración de Listados:** Los anuncios expiran de manera automática a los 60 días. El sistema envía notificaciones previas por correo con un enlace seguro de renovación rápida de un solo clic.
 
 ---
 
-## ⚙️ Environment Variables and Configuration
+## ⚙️ Configuración y Variables de Entorno
 
-Configure your environment by duplicating `.env.example` to `.env`. Below is the complete specification:
+### 1. Variables de Entorno Requeridas en Arranque (.env)
+A diferencia de los ajustes de diseño configurables desde el Panel de Admin, estas claves de bajo nivel son requeridas en la inicialización:
 
-| Variable | Description | Default Value / Option |
+| Variable | Descripción | Default / Opción |
 |---|---|---|
-| `LLM_PROVIDER` | Main LLM provider engine | `openrouter` \| `grok` \| `openai is optional onli need one api ai no more ` |
-| `API_KEY_OPENROUTER` | API credential for OpenRouter | Optional |
-| `MODEL_OPENROUTER` | Selected model on OpenRouter platform | `meta-llama/llama-3.3-70b-instruct` |
-| `API_KEY_GROK` | API credential for xAI Grok Console | Optional |
-| `MODEL_GROK` | Selected Grok model | `grok-2-1212` |
-| `API_KEY_OPENAI` | API credential for OpenAI | Optional |
-| `MODEL_OPENAI` | Selected OpenAI model | `gpt-4o-mini` |
-| `DATABASE_URL` | Relational database connection string | `sqlite:///vcdiligence.db` (dev fallback) |
-| `PORT` | Web server port number | `10000` |
-| `JWT_SECRET` | Mandatory JWT signing key. Code fails on start if empty. | Must be set |
-| `MIN_USERS_TO_SHOW_STATS` | Minimum user accounts before public landing stats are active | `20` (Shows validation banner if below) |
-| `LISTING_EXPIRY_DAYS` | Number of days a marketplace listing remains active | `60` |
-| `SMTP_HOST` | Outgoing SMTP mail server | `smtp.gmail.com` |
-| `SMTP_PORT` | SMTP port | `587` |
-| `SMTP_USERNAME` | Outgoing SMTP email user | Optional |
-| `SMTP_PASSWORD` | Outgoing SMTP email app password | Optional |
-| `SMTP_FROM` | Sender display email header | `noreply@dealscout.ai` |
-| `SLACK_WEBHOOK_URL` | Slack webhook URL for slack alerts | Optional |
+| `DATABASE_URL` | String de conexión relacional | `sqlite:///vcdiligence.db` |
+| `JWT_SECRET` | Clave secreta para firma de tokens JWT (Mandatorio, la app falla si está vacío) | Debe configurarse |
+| `ENV` | Modo de entorno del servidor | `development` \| `production` |
+| `MIN_USERS_TO_SHOW_STATS` | Límite mínimo de usuarios para visualizar estadísticas de landing | `20` |
+| `LISTING_EXPIRY_DAYS` | Vigencia de un listado de inversión pública antes de expirar | `60` |
+| `SMTP_HOST` / `SMTP_PORT` | Configuración del servidor de alertas SMTP | `smtp.gmail.com` \| `587` |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | Credenciales de correo de alertas | Opcional |
+
+### 2. Configuración Centralizada en Base de Datos (SystemConfig)
+Estas propiedades se guardan directamente en la tabla `SystemConfig` y pueden ser modificadas en vivo por los administradores desde el panel visual:
+
+- **Configuración de Marca (Branding):**
+  - `platform_name`: Nombre visible del portal (por defecto `DealScout AI`).
+  - `theme_color`: Estilo CSS principal (`dark`, `light`, `red`).
+  - `logo_url`: Enlace público o string Base64 del logo corporativo institucional.
+  - `welcome_message`: Mensaje de portada en landing/login.
+  - `analysis_loading_message`: Mensaje desplegado durante el scraping y análisis de agentes.
+  - `analysis_complete_message`: Leyenda de finalización exitosa.
+  - `footer_message`: Pie de página global del portal.
+- **Presupuestos y Consumos (LLM Budget):**
+  - `max_tokens_per_analysis`: Presupuesto acumulativo de tokens consumidos por todo el grupo de agentes en una sola corrida (0 = sin límite). Si se supera, se cancela la ejecución inmediatamente levantando un `TokenBudgetExceededError` para evitar sobrefacturación sin afectar la salud de la API Key.
+  - `max_tokens_per_agent_call`: Límite máximo de tokens de respuesta permitido para cada consulta individual de un especialista (0 = sin límite).
 
 ---
 
 ## 🧩 Directory Map and Repository Layout
 
-- `vcdiligence/app.py`: Core FastAPI application containing all router endpoints, JWT session validation, directory models interaction, administrative moderation, and template rendering.
-- `vcdiligence/database.py`: SQLAlchemy database models representing Organizations, Users, Testimonials, Error Reports, Reports, Tasks, Audit Logs, and Company Listings.
-- `vcdiligence/crew.py`: CrewAI agent definitions and task orchestration. Injects live-scraped text data and external public API payloads.
-- `vcdiligence/scraper.py`: Advanced `SmartScraper` managing requests/BS4 extraction, lazy-loaded Playwright fallback browser, and PDF/PPTX Pitch Deck parsing.
-- `vcdiligence/public_apis.py`: Independent live connectors for SEC EDGAR, CourtListener, USPTO, and the GitHub API. Includes force refresh bypass parameters.
-- `vcdiligence/pdf_generator.py`: Generates beautiful, white-label, multi-page ReportLab PDF reports incorporating custom logos.
-- `vcdiligence/tasks.py`: Implements background task execution via `FastAPI BackgroundTasks`.
-- `vcdiligence/monitoring.py`: Periodic scheduler utilizing APScheduler to run background monitoring and renew warnings.
-- `vcdiligence/validator.py`: Mitigates Server-Side Request Forgery (SSRF) and implements rate-limiting.
-- `vcdiligence/seed.py`: Seed CLI to bootstrap the database with dummy analysts, admins, and pre-cached organizations.
-- `vcdiligence/benchmark.py`: Admin CLI benchmarking script to run evaluations against a local gold dataset.
+- `vcdiligence/app.py`: Aplicación FastAPI principal que administra los endpoints REST, políticas de autenticación, moderación, carga de Pitch Decks, webhooks de pagos (Stripe, Crypto) y renderizado de plantillas HTML.
+- `vcdiligence/database.py`: Definiciones SQLAlchemy de todas las tablas e índices del sistema. Gestiona la inicialización segura e inyección programática de migraciones Alembic.
+- `vcdiligence/system_config.py`: Definición de CONFIG_REGISTRY de configuración dinámica. Métodos seguros para leer (`get_config`) y escribir (`set_config`) valores tipados y validados.
+- `vcdiligence/agent_schemas.py`: Contiene el esquema Pydantic estructurado de `AgentFinding` utilizado para restringir el formato de salida JSON de los agentes analistas.
+- `vcdiligence/crew.py`: Implementación del pipeline cognitivo CrewAI. Controla los callbacks de registro de consumo de tokens y el loop inteligente de rotación `run_crew_with_rotation()`.
+- `vcdiligence/scraper.py`: Adaptador inteligente `SmartScraper` encargado de extraer texto de portales, PDFs de Pitch Decks, presentaciones PPTX y perfiles de LinkedIn.
+- `vcdiligence/public_apis.py`: Integración de conectores externos (SEC EDGAR, CourtListener, USPTO, GitHub API) y caché de consultas.
+- `vcdiligence/pdf_generator.py`: Generador ReportLab que maquilla el memo técnico final de prosa e incluye branding white-label en el archivo descargable.
+- `vcdiligence/tasks.py`: Módulo que consume las tareas asíncronas en segundo plano por medio de FastAPI BackgroundTasks.
+- `vcdiligence/monitoring.py`: Worker recurrente de APScheduler que corre análisis de cambios recurrentes, actualiza el estatus de las llaves bloqueadas del pool y expira publicaciones antiguas.
+- `vcdiligence/validator.py`: Capa de seguridad que audita SSRF y deniega conexiones a rangos privados/locales de IP.
 
 ---
 
-## 🚀 Quick Start & Installation
+## 🚀 Quick Start & Instalación
 
-### 1. Clone the repository and install dependencies
-Make sure you have [Poetry](https://python-poetry.org/) or standard python virtual environment installed.
+### 1. Clonar el Repositorio e Instalar Dependencias
+Asegúrate de contar con Python y Poetry instalado en tu máquina de desarrollo:
 ```bash
 git clone https://github.com/SURESHBEEKHANI/CrewAI-End-to-End.git DealScoutAI
 cd DealScoutAI
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
-playwright install chromium
+poetry install
+poetry run playwright install chromium
 ```
 
-### 2. Configure Environment Variables
-Create your local `.env` configuration file:
+### 2. Configurar el Archivo de Entorno
+Copia la plantilla y configura tu secreto y llaves API correspondientes:
 ```bash
 cp .env.example .env
 ```
-Ensure you provide a secure string for `JWT_SECRET` and add your chosen `API_KEY_*`.
+*(Asegúrate de asignar una clave fuerte en `JWT_SECRET` para evitar que la aplicación falle en el arranque)*
 
-### 3. Bootstrap and Seed the Database
-Initialize tables and populate with default credentials (admin and analyst accounts):
+### 3. Ejecutar las Migraciones Iniciales de Alembic
+El sistema aplicará automáticamente todas las tablas al iniciar la aplicación, pero también puedes ejecutarlas o comprobarlas manualmente mediante:
 ```bash
-python -m vcdiligence.seed
+poetry run alembic upgrade head
 ```
 
-### 4. Start the Server
-Launch the local development web server:
+### 4. Alimentar Datos de Prueba (Seeding)
+Inserta datos iniciales de prueba (usuarios analistas, administradores, configuraciones del CONFIG_REGISTRY y claves API mock):
 ```bash
-vcdiligence
+poetry run python -m vcdiligence.seed
 ```
-Open `http://localhost:10000` on your web browser.
 
-* **Analyst Login:** `analyst@dealscout.ai` / `analystpassword`
-* **Admin Login:** `admin@dealscout.ai` / `adminpassword`
+### 5. Iniciar la Aplicación
+```bash
+poetry run python -m vcdiligence.app
+```
+La aplicación estará disponible en `http://localhost:10000`.
+
+- **Analista de Prueba:** `analyst@dealscout.ai` / `analystpassword`
+- **Administrador de Prueba:** `admin@dealscout.ai` / `adminpassword`
 
 ---
 
-## 🧪 Testing
+## 🧪 Pruebas Unitarias e Integración
 
-To execute the unit and integration test suite and ensure no regressions exist across the routing, scrapers, or database models:
+Para ejecutar la batería completa de pruebas automatizadas y asegurar que no existan regresiones de base de datos o lógica:
 ```bash
 poetry run python -m unittest discover -s tests
 ```
-## ⚡ Resource Optimization
 
-The system is designed to be **efficient and lightweight** in production:
-
-- **Single LLM**: The system uses **only one** LLM provider configurable via `LLM_PROVIDER` (OpenRouter, Grok, or OpenAI). It does not run multiple models simultaneously, simplifying costs and maintenance.
-
-- **Playwright on-demand**: The smart scraper first attempts with `requests/BS4` (fast and no overhead). **Only** if it detects Cloudflare, heavy JavaScript, or SPAs, it activates Playwright headless. Once scraping is complete, the browser **automatically shuts down** to free resources.
-
-- **SMTP as internal function**: The email service is not a standalone server. It runs **as a function within the code** that activates **only when needed** (notifications, expiration alerts, contacts). After sending the email, the connection closes.
-
-- **Automatic database**: In environments like Render, the database (PostgreSQL) is automatically provisioned via `DATABASE_URL`. In development, it defaults to SQLite with no additional configuration.
-
-This **on-demand** approach allows deploying the application in the cloud with optimized costs and no unnecessary background services running.
 ---
+
+## ⚡ Optimización de Recursos
+
+El sistema se diseñó de manera ágil e inteligente para operar con mínima sobrecarga:
+- **Modelo de LLM Unificado:** Funciona consumiendo **únicamente** un proveedor configurado a la vez, simplificando radicalmente costos.
+- **Navegador Playwright Bajo Demanda:** Solo levanta y arranca el motor Chromium headless si la extracción HTML inicial mediante `requests` detecta SPAs o firewalls pesados. El navegador se destruye inmediatamente al terminar para liberar memoria RAM.
+- **SMTP Seguro Integrado:** La entrega de correos se ejecuta a nivel de función nativa sin requerir workers pesados corriendo continuamente en segundo plano.
+
+---
+
 ## 👨‍💻 Creador
 
 **DealScout AI** es un proyecto creado y mantenido por **[Marlon Baez Mendez](https://github.com/athenacoree/MARLON-BAEZ-MENDEZ-)**.
 
 Para más información sobre el autor, consulta su [bibliografía oficial](https://github.com/athenacoree/MARLON-BAEZ-MENDEZ-).
-*For detailed instructions on architectural layers and multi-provider cognitive configurations, please check [EXPLICACION_PROYECTO.md](EXPLICACION_PROYECTO.md).*
