@@ -3,7 +3,7 @@ services:
     name: dealscout-ai
     env: python
     plan: free
-    buildCommand: pip install --upgrade pip && pip install -e . && playwright install --with-deps chromium
+    buildCommand: pip install --upgrade pip && pip install -e . && playwright install chromium
     startCommand: "alembic upgrade head && python -m vcdiligence.app"
     autoDeploy: false
     envVars:
