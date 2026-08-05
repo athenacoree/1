@@ -18,6 +18,7 @@ from vcdiligence.database import (
     ReportChange, Decision, PrecisionBenchmark, CompanyListing, ListingInterest,
     ApiKeyPool, PricingPlan, UserWallet, PaymentTransaction, SystemConfig
 )
+from vcdiligence.system_config import get_config, set_config, CONFIG_REGISTRY
 from vcdiligence.security import hash_password, verify_password, create_access_token
 from vcdiligence.auth import get_current_user, require_admin
 from vcdiligence.validator import validate_url_for_ssrf, check_rate_limit
@@ -524,6 +525,21 @@ def get_public_stats(db: Session = Depends(get_db)):
             "personal": personal_users
         },
         "analyzed_companies": analyzed_companies
+    }
+
+@app.get("/branding")
+def get_public_branding(db: Session = Depends(get_db)):
+    """
+    Returns public branding variables for the frontend landing and login screens.
+    """
+    return {
+        "platform_name": get_config(db, "platform_name") or "DealScout AI",
+        "theme_color": get_config(db, "theme_color") or "dark",
+        "logo_url": get_config(db, "logo_url") or "",
+        "welcome_message": get_config(db, "welcome_message") or "Bienvenido a DealScout AI",
+        "analysis_loading_message": get_config(db, "analysis_loading_message") or "Analizando la startup, por favor espera...",
+        "analysis_complete_message": get_config(db, "analysis_complete_message") or "¡Análisis completado con éxito!",
+        "footer_message": get_config(db, "footer_message") or "DealScout AI - Venture Capital Due Diligence"
     }
 
 # ----------------- SETTINGS & WHITE-LABEL ENDPOINTS -----------------
@@ -1783,6 +1799,184 @@ def express_interest_on_listing(id: int, current_user: User = Depends(get_curren
     }
 
 # ----------------- ADMIN DIRECT USER VERIFICATION ENDPOINT -----------------
+
+@app.get("/admin/config")
+def list_admin_configs(current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """
+    Returns all configuration items grouped by category.
+    """
+    # Grouped configuration return
+    # First, populate any missing registry keys in database
+    for key, info in CONFIG_REGISTRY.items():
+        existing = db.query(SystemConfig).filter_by(key=key).first()
+        if not existing:
+            set_config(db, key, info["default"])
+
+    configs = db.query(SystemConfig).all()
+    grouped = {}
+    for c in configs:
+        cat = c.category
+        if cat not in grouped:
+            grouped[cat] = []
+        grouped[cat].append({
+            "key": c.key,
+            "value": c.value,
+            "value_type": c.value_type,
+            "description": c.description
+        })
+    return grouped
+
+@app.post("/admin/config")
+def update_admin_config(
+    key: str = Form(...),
+    value: str = Form(...),
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Updates a system configuration value.
+    """
+    cfg = set_config(db, key, value)
+    return {
+        "status": "success",
+        "key": cfg.key,
+        "value": cfg.value,
+        "category": cfg.category
+    }
+
+@app.post("/admin/branding/logo")
+def upload_branding_logo(
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Receives an image (multipart/form-data), validates it (png/jpg/svg, max 2MB),
+    and saves it. If AWS S3 environment variables are configured, upload to S3.
+    Otherwise fallback to base64 data URL representation.
+    """
+    # Validation
+    content_type = file.content_type
+    filename = file.filename.lower()
+
+    allowed_exts = [".png", ".jpg", ".jpeg", ".svg"]
+    file_ext = os.path.splitext(filename)[1]
+
+    if file_ext not in allowed_exts:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Format not allowed. Only {', '.join(allowed_exts)} are supported."
+        )
+
+    # Check file size (2MB)
+    max_size = 2 * 1024 * 1024
+    content = file.file.read()
+    if len(content) > max_size:
+        raise HTTPException(
+            status_code=400,
+            detail="File size exceeds the 2MB limit."
+        )
+
+    # Reset file read pointer
+    file.file.seek(0)
+
+    # S3 backup variables check
+    s3_endpoint = os.getenv("BACKUP_S3_ENDPOINT")
+    s3_access_key = os.getenv("BACKUP_S3_ACCESS_KEY")
+    s3_secret_key = os.getenv("BACKUP_S3_SECRET_KEY")
+    s3_bucket = os.getenv("BACKUP_S3_BUCKET")
+
+    logo_url = ""
+    if s3_endpoint and s3_access_key and s3_secret_key and s3_bucket:
+        try:
+            import boto3
+            # Simple boto3 upload
+            s3_client = boto3.client(
+                's3',
+                endpoint_url=s3_endpoint,
+                aws_access_key_id=s3_access_key,
+                aws_secret_access_key=s3_secret_key
+            )
+            object_name = f"branding_logo_{uuid.uuid4().hex}{file_ext}"
+            s3_client.put_object(
+                Bucket=s3_bucket,
+                Key=object_name,
+                Body=content,
+                ContentType=content_type,
+                ACL='public-read'
+            )
+            # Build public URL depending on endpoint
+            if s3_endpoint.endswith('/'):
+                logo_url = f"{s3_endpoint}{s3_bucket}/{object_name}"
+            else:
+                logo_url = f"{s3_endpoint}/{s3_bucket}/{object_name}"
+            logger.info(f"Successfully uploaded branding logo to S3: {logo_url}")
+        except Exception as e:
+            logger.warning(f"S3 logo upload failed: {str(e)}. Falling back to Base64.")
+
+    if not logo_url:
+        # Base64 fallback
+        import base64
+        encoded = base64.b64encode(content).decode('utf-8')
+        mime = content_type or "image/png"
+        logo_url = f"data:{mime};base64,{encoded}"
+        logger.info("Successfully encoded branding logo to Base64")
+
+    set_config(db, "logo_url", logo_url)
+    return {
+        "status": "success",
+        "logo_url": logo_url
+    }
+
+@app.get("/admin/token-usage")
+def get_token_usage_stats(current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """
+    Returns AI token usage statistics:
+    - Daily aggregated consumption (last 30 days)
+    - Average consumption per analysis
+    - Breakdown by agent
+    """
+    from sqlalchemy import func
+    from vcdiligence.database import TokenUsageLog
+
+    # 1. Daily usage (last 30 days)
+    start_date = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+    logs = db.query(TokenUsageLog).filter(TokenUsageLog.created_at >= start_date).all()
+
+    daily_data = {}
+    for i in range(30):
+        d_str = (datetime.datetime.utcnow() - datetime.timedelta(days=i)).strftime("%Y-%m-%d")
+        daily_data[d_str] = 0
+
+    for log in logs:
+        d_str = log.created_at.strftime("%Y-%m-%d")
+        if d_str in daily_data:
+            daily_data[d_str] += log.total_tokens
+
+    daily_usage = [{"date": k, "tokens": v} for k, v in sorted(daily_data.items())]
+
+    # 2. Average per analysis
+    total_tokens_all = db.query(func.sum(TokenUsageLog.total_tokens)).scalar() or 0
+    unique_analyses = db.query(func.count(func.distinct(TokenUsageLog.task_id))).scalar() or 0
+    avg_per_analysis = int(total_tokens_all / unique_analyses) if unique_analyses > 0 else 0
+
+    # 3. Agent breakdown
+    agent_stats_query = db.query(
+        TokenUsageLog.agent_name,
+        func.sum(TokenUsageLog.total_tokens).label("total_tokens")
+    ).group_by(TokenUsageLog.agent_name).all()
+
+    agent_breakdown = {item[0]: item[1] for item in agent_stats_query}
+    agent_breakdown_list = [
+        {"agent": k, "tokens": v} for k, v in sorted(agent_breakdown.items(), key=lambda x: x[1], reverse=True)
+    ]
+
+    return {
+        "daily_usage": daily_usage,
+        "avg_per_analysis": avg_per_analysis,
+        "agent_breakdown": agent_breakdown_list,
+        "total_tokens": total_tokens_all
+    }
 
 @app.post("/admin/users/{id}/verify-by-admin")
 def toggle_admin_verification(
