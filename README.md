@@ -2,6 +2,8 @@
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/athenacoree/1)
 
+sitio: 
+https://dealscout-ai.onrender.com/
 **DealScout AI** (configurado internamente como `VCDueDiligenceAgent`) es una plataforma autónoma de auditoría (*due diligence*) y directorio bidireccional de inversión para startups y firmas de Venture Capital de nivel empresarial. Construida con **FastAPI**, **SQLAlchemy** y **CrewAI**, permite evaluar de forma profunda startups a partir de URLs públicas, presentaciones Pitch Deck (PDF/PPTX) o perfiles de LinkedIn, resolviendo la necesidad de análisis preliminares de alta fidelidad sin incurrir en procesos manuales lentos.
 
 ---
