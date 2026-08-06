@@ -105,6 +105,27 @@ class TestNewFeatures(unittest.TestCase):
         self.db.delete(task)
         self.db.commit()
 
+    @mock.patch("vcdiligence.app.BackgroundTasks.add_task")
+    def test_language_selection_flow(self, mock_add_task):
+        """Verify that /analyze endpoint accepts custom language and saves it to Task."""
+        headers = {"Authorization": f"Bearer {self.analyst_token}"}
+        resp = self.client.post("/analyze", json={
+            "url": "https://example.com",
+            "notify_email": "test@notify.com",
+            "language": "en"
+        }, headers=headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["status"], "running")
+        self.assertTrue(mock_add_task.called)
+
+        # Verify that task was created in DB with language 'en'
+        task = self.db.query(Task).filter_by(id="1_example.com").first()
+        self.assertIsNotNone(task)
+        self.assertEqual(task.status, "starting")
+        self.assertEqual(task.language, "en")
+        self.db.delete(task)
+        self.db.commit()
+
     def test_monitoring_endpoints(self):
         """Verify we can configure monitoring settings and get monitoring history."""
         headers = {"Authorization": f"Bearer {self.analyst_token}"}

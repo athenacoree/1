@@ -281,6 +281,8 @@
     llmUsed: '',
     errorMessage: '',
     pollInterval: null,
+    notionConfigured: false,
+    selectedLanguage: 'es',
 
     async loadBranding() {
         try {
@@ -299,6 +301,16 @@
     async init() {
         // Load public branding first
         await this.loadBranding();
+        // Load integrations status
+        try {
+            const res = await fetch('/config/integrations-status');
+            if (res.ok) {
+                const data = await res.json();
+                this.notionConfigured = data.notion_configured;
+            }
+        } catch (err) {
+            console.error('Failed to load integrations status', err);
+        }
         // Fallback if no local storage preference exists
         if (!localStorage.getItem('ui_theme_override')) {
             this.uiTheme = this.branding.theme_color === 'light' ? 'light' : 'dark';
@@ -440,6 +452,26 @@
         this.resultData = null;
         this.showAdminPanel = false;
         localStorage.removeItem('token');
+    },
+
+    async sendToNotion(report) {
+        if (!report) return;
+        try {
+            const res = await fetch('/reports/' + report.domain + '/send-to-notion', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + this.token
+                }
+            });
+            if (res.ok) {
+                alert('¡Reporte exportado exitosamente a tu base de datos de Notion!');
+            } else {
+                const err = await res.json();
+                alert('Error al exportar a Notion: ' + (err.detail || 'Error desconocido'));
+            }
+        } catch (err) {
+            alert('Error de conexión al exportar a Notion');
+        }
     },
 
     async loadUserProfile() {
@@ -887,7 +919,8 @@
         try {
             const payload = {
                 url: this.startupUrl,
-                notify_email: this.notifyEmail || null
+                notify_email: this.notifyEmail || null,
+                language: this.selectedLanguage
             };
             if (this.receiveWhatsapp && this.user && this.user.verified_by_admin) {
                 payload.receive_whatsapp = true;
@@ -937,7 +970,8 @@
         try {
             const payload = {
                 linkedin_url: this.linkedinUrl,
-                notify_email: this.notifyEmail || null
+                notify_email: this.notifyEmail || null,
+                language: this.selectedLanguage
             };
             if (this.receiveWhatsapp && this.user && this.user.verified_by_admin) {
                 payload.receive_whatsapp = true;
@@ -986,6 +1020,7 @@
 
         const formData = new FormData();
         formData.append('pitch_deck', this.pitchDeckFile);
+        formData.append('language', this.selectedLanguage);
         if (this.startupUrl) {
             formData.append('url', this.startupUrl);
         }
@@ -1627,6 +1662,15 @@
                         <div class="glass p-6 rounded-2xl">
                             <h3 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Empezar Nuevo Análisis</h3>
 
+                            <!-- Language Selector Dropdown -->
+                            <div class="mb-4">
+                                <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Idioma del Reporte / Language</label>
+                                <select x-model="selectedLanguage" class="w-full px-4 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 focus:border-cyan-500 outline-none cursor-pointer">
+                                    <option value="es">Español</option>
+                                    <option value="en">English</option>
+                                </select>
+                            </div>
+
                             <!-- Method Tabs -->
                             <div class="flex border-b border-slate-800 mb-4 bg-slate-950/40 rounded-lg p-1">
                                 <button @click="entryMethod = 'url'" :class="entryMethod === 'url' ? 'bg-slate-800 text-cyan-400' : 'text-slate-400'" class="flex-grow py-2 text-center text-xs font-bold rounded transition-all">URL</button>
@@ -1855,6 +1899,9 @@
                                         </a>
                                     </div>
                                     <div class="flex gap-2">
+                                        <button x-show="notionConfigured" @click="sendToNotion(resultData)" class="px-4 py-2 bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-400 rounded-xl text-xs font-bold border border-indigo-500/20 flex items-center space-x-1.5" style="display: none;">
+                                            <span>Enviar a Notion</span>
+                                        </button>
                                         <button @click="openOptIn(resultData)" class="px-4 py-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 rounded-xl text-xs font-bold border border-emerald-500/20 flex items-center space-x-1.5">
                                             <span>Publicar en Directorio</span>
                                         </button>
@@ -1954,7 +2001,26 @@
                                         </p>
                                     </div>
 
-                                    <div x-show="activeTab === 'report'" class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed whitespace-pre-wrap select-text" x-text="resultData ? resultData.report_md : ''"></div>
+                                    <div x-show="activeTab === 'report'">
+                                        <!-- Template for Screenshot Gallery -->
+                                        <template x-if="resultData && resultData.screenshot_gallery && resultData.screenshot_gallery.length > 0">
+                                            <div class="mb-8 p-5 bg-slate-900/40 border border-slate-800/80 rounded-2xl">
+                                                <h4 class="text-[10px] font-extrabold text-cyan-400 uppercase tracking-widest mb-4">Capturas de Pantalla / Galería de Fuentes</h4>
+                                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                    <template x-for="item in resultData.screenshot_gallery" :key="item.url">
+                                                        <div class="flex flex-col items-center bg-slate-950/80 p-3 rounded-xl border border-slate-800/60 hover:border-cyan-500/50 transition">
+                                                            <a :href="item.screenshot_url" target="_blank" rel="noopener noreferrer" class="w-full h-24 overflow-hidden rounded-lg mb-2 block bg-slate-900 flex items-center justify-center">
+                                                                <img :src="item.screenshot_url" :alt="item.name" class="w-full h-full object-cover opacity-80 hover:opacity-100 transition" />
+                                                            </a>
+                                                            <a :href="item.url" target="_blank" rel="noopener noreferrer" class="text-center text-xs text-slate-400 hover:text-cyan-400 truncate max-w-full font-semibold" x-text="item.name"></a>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+
+                                        <div class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed whitespace-pre-wrap select-text" x-text="resultData ? resultData.report_md : ''"></div>
+                                    </div>
 
                                     <div x-show="activeTab === 'omissions'" class="space-y-4">
                                         <div class="p-4 bg-yellow-950/20 border border-yellow-900/50 rounded-2xl text-yellow-300 text-xs mb-4">

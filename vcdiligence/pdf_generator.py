@@ -228,6 +228,69 @@ def generate_report_pdf(
             story.append(Paragraph(f"<b>&bull; {src.upper()}:</b> {reason}", body_style))
         story.append(Spacer(1, 15))
 
+    # 2c. Screenshot Gallery (miniatures, clickable)
+    screenshot_gallery = report_data.get("screenshot_gallery", [])
+    if screenshot_gallery:
+        story.append(Paragraph("Capturas de Pantalla / Galería de Fuentes", h1_style))
+        row_images = []
+        row_labels = []
+
+        for item in screenshot_gallery[:4]:
+            img_url = item.get("screenshot_url")
+            src_url = item.get("url")
+            name = item.get("name", "Fuente")
+
+            # Try downloading the image to a temp file
+            local_path = None
+            if img_url:
+                try:
+                    import requests
+                    res = requests.get(img_url, timeout=5)
+                    if res.status_code == 200:
+                        import tempfile
+                        ext = ".png"
+                        if "webp" in img_url:
+                            ext = ".webp"
+                        elif "jpg" in img_url or "jpeg" in img_url:
+                            ext = ".jpg"
+
+                        fd, temp_path = tempfile.mkstemp(suffix=ext)
+                        with os.fdopen(fd, 'wb') as tmp:
+                            tmp.write(res.content)
+                        local_path = temp_path
+                except Exception as e:
+                    logger.warning(f"Could not pre-download screenshot {img_url} for PDF: {str(e)}")
+
+            if local_path and os.path.exists(local_path):
+                try:
+                    from reportlab.platypus import Image as RLImage
+                    img = RLImage(local_path, width=1.4*inch, height=0.9*inch)
+                    row_images.append(img)
+                except Exception as img_err:
+                    logger.warning(f"Error loading image into ReportLab: {str(img_err)}")
+                    row_images.append(Paragraph(f'<a href="{src_url}"><font color="#06b6d4"><b>[Ver captura]</b></font></a>', body_style))
+            else:
+                row_images.append(Paragraph(f'<a href="{src_url}"><font color="#06b6d4"><b>[Ver captura]</b></font></a>', body_style))
+
+            row_labels.append(Paragraph(f'<a href="{src_url}"><font color="#06b6d4"><b>{name}</b></font></a>', body_style))
+
+        if row_images:
+            # Pad rows to length 4 if less
+            while len(row_images) < 4:
+                row_images.append("")
+                row_labels.append("")
+
+            gallery_table = Table([row_images, row_labels], colWidths=[1.65*inch]*4)
+            gallery_table.setStyle(TableStyle([
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+                ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#f8fafc")),
+                ('BOX', (0,0), (-1,-1), 1, colors.HexColor("#e2e8f0")),
+            ]))
+            story.append(gallery_table)
+            story.append(Spacer(1, 15))
+
     # 3. Report Body (Parse the Markdown and add paragraphs/headings)
     report_md = report_data.get("report_md", "")
 
@@ -243,19 +306,35 @@ def generate_report_pdf(
             continue
 
         if stripped.startswith("### "):
-            story.append(Paragraph(stripped[4:], h1_style))
+            text = stripped[4:]
+            text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2"><font color="#06b6d4"><b>\1</b></font></a>', text)
+            text = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", text)
+            text = re.sub(r"\*(.*?)\*", r"<i>\1</i>", text)
+            story.append(Paragraph(text, h1_style))
         elif stripped.startswith("## "):
-            story.append(Paragraph(stripped[3:], h1_style))
+            text = stripped[3:]
+            text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2"><font color="#06b6d4"><b>\1</b></font></a>', text)
+            text = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", text)
+            text = re.sub(r"\*(.*?)\*", r"<i>\1</i>", text)
+            story.append(Paragraph(text, h1_style))
         elif stripped.startswith("# "):
-            story.append(Paragraph(stripped[2:], h1_style))
+            text = stripped[2:]
+            text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2"><font color="#06b6d4"><b>\1</b></font></a>', text)
+            text = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", text)
+            text = re.sub(r"\*(.*?)\*", r"<i>\1</i>", text)
+            story.append(Paragraph(text, h1_style))
         elif stripped.startswith("- ") or stripped.startswith("* "):
-            story.append(Paragraph(f"&bull; {stripped[2:]}", body_style))
+            text = stripped[2:]
+            text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2"><font color="#06b6d4"><b>\1</b></font></a>', text)
+            text = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", text)
+            text = re.sub(r"\*(.*?)\*", r"<i>\1</i>", text)
+            story.append(Paragraph(f"&bull; {text}", body_style))
         else:
-            # Check for bold tag conversion
-            formatted_line = stripped
-            formatted_line = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", formatted_line)
-            formatted_line = re.sub(r"\*(.*?)\*", r"<i>\1</i>", formatted_line)
-            story.append(Paragraph(formatted_line, body_style))
+            text = stripped
+            text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2"><font color="#06b6d4"><b>\1</b></font></a>', text)
+            text = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", text)
+            text = re.sub(r"\*(.*?)\*", r"<i>\1</i>", text)
+            story.append(Paragraph(text, body_style))
 
     # Page numbering function
     def add_page_number(canvas, doc):

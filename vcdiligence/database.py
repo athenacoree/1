@@ -104,6 +104,7 @@ class Report(Base):
     report_md = Column(Text, nullable=False)
     pdf_path = Column(String, nullable=True)
     llm_provider = Column(String, nullable=True)
+    screenshot_gallery = Column(JSON, nullable=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
@@ -168,6 +169,7 @@ class Task(Base):
     message = Column(String, nullable=True)
     result_json = Column(JSON, nullable=True)
     partial_sections = Column(JSON, default=dict, nullable=True)
+    language = Column(String, default="es", nullable=False)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
@@ -293,6 +295,14 @@ class SystemConfig(Base):
     value_type = Column(String, default="string", nullable=False) # "string", "int", "bool"
     category = Column(String, default="general", nullable=False) # "branding", "llm_budget", "general", "payments"
     description = Column(String, default="", nullable=False)
+
+class ScreenshotCache(Base):
+    __tablename__ = "screenshot_caches"
+
+    id = Column(Integer, primary_key=True, index=True)
+    url = Column(String, index=True, nullable=False)
+    screenshot_url = Column(String, nullable=False)
+    captured_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
 
 def init_db():
     import os

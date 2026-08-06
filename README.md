@@ -214,6 +214,31 @@ poetry run python -m unittest discover -s tests
 
 ---
 
+## 🌟 Últimas Mejoras e Integraciones (Actualización 2026)
+
+DealScout AI se ha robustecido con una serie de características avanzadas de última generación:
+
+### 1. Fuentes estructuradas por sección (Parte 1)
+En lugar de amontonar todas las referencias al final del documento, ahora las fuentes de información de mercado, competencia, producto y legales se atribuyen de manera ultra-localizada. Al final de cada subsección relevante del Deep Dive, se renderiza un bloque de citas exacto en formato markdown interactivo:
+`**Fuentes de esta sección:** [Nombre de fuente](url) (consultado DD-MM-YYYY)`. Además, las citas son totalmente clickables y funcionales en los documentos PDFs exportados de ReportLab.
+
+### 2. Eliminación de genericidad y duplicidades (Parte 2)
+Se ha implementado una rigurosa restricción cognitiva contra términos vagos como *"riesgos regulatorios"* o *"intensa competencia"* sin un sustento concreto (nombre de competidor, cifra o cita textual). El memo técnico se complementa con reglas estrictas de no-repetición de conceptos y profundización por ángulos distintivos (financiero, operativo, etc.).
+
+### 3. Investigación real de fundadores y equipo sin fotos (Parte 3)
+El motor de scraping de LinkedIn y DuckDuckGo extrae de forma estructurada los nombres, cargos y URLs de perfil de LinkedIn de los fundadores y equipo directivo de la startup, sin almacenar fotos para mantener la ligereza y cumplimiento de la privacidad, sustituyendo los placeholders genéricos de "falta de información del equipo" por un organigrama real y verificable.
+
+### 4. Capturas de pantalla ligeras y eficientes (Parte 4)
+Para no ralentizar ni agotar los recursos del servidor con pesados navegadores headless o procesos de Puppeteer/Playwright que consumen toda la memoria RAM, se ha integrado la API gratuita externa de **Microlink.io**. Esta captura exactamente 4 capturas clave de fuentes diferentes por análisis y las almacena en la nueva tabla `ScreenshotCache` de la base de datos (con validez de 30 días para evitar llamadas redundantes), renderizándolas como una elegante galería de miniaturas tanto en el PDF final como en el Dashboard de resultados web.
+
+### 5. Integración directa con Notion (Parte 5)
+Permite exportar al instante los resultados de cualquier reporte directamente como una página estructurada dentro de la base de datos de Notion configurada mediante las variables de entorno `NOTION_API_KEY` y `NOTION_DATABASE_ID`. La UI expone dinámicamente un botón "Enviar a Notion" interactivo si la integración está activa.
+
+### 6. Selector de idioma inteligente en un clic (Parte 6)
+Evita los memos con secciones mezcladas en inglés y español. Mediante un selector en el formulario principal, el usuario elige el idioma de destino del análisis (`es` o `en`). Este valor se guarda en la tabla `Task` y se inyecta dinámicamente como instrucción prioritaria a los 7 agentes de CrewAI, quienes traducen, sintetizan y emiten el veredicto íntegramente en el idioma solicitado.
+
+---
+
 ## 👨‍💻 Creador y Atribuciones
 
 **DealScout AI** es desarrollado y mantenido por **[Marlon Baez Mendez](https://github.com/athenacoree/MARLON-BAEZ-MENDEZ-)**.
