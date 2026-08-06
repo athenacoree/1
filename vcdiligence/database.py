@@ -167,6 +167,7 @@ class Task(Base):
     progress = Column(Integer, default=5, nullable=False)
     message = Column(String, nullable=True)
     result_json = Column(JSON, nullable=True)
+    partial_sections = Column(JSON, default=dict, nullable=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 

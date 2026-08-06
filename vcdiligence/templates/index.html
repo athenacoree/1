@@ -42,6 +42,14 @@
             --theme-text: #ef4444;
         }
 
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+
         body {
             background-color: var(--bg-color) !important;
             background-image:
@@ -62,9 +70,98 @@
             border: 1px solid rgba(255, 255, 255, 0.12);
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
         }
+
+        /* Light Theme Compatibility Overrides */
+        .light body {
+            background-color: #f8fafc !important; /* slate-50 */
+            color: #0f172a !important; /* slate-900 */
+        }
+        .light .glass {
+            background: rgba(255, 255, 255, 0.7) !important;
+            border: 1px solid rgba(15, 23, 42, 0.1) !important;
+        }
+        .light .glass-premium {
+            background: rgba(255, 255, 255, 0.85) !important;
+            border: 1px solid rgba(15, 23, 42, 0.15) !important;
+            box-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.08) !important;
+        }
+        .light h1, .light h2, .light h3, .light h4, .light h5, .light h6, .light th {
+            color: #0f172a !important; /* slate-900 */
+        }
+        .light .text-slate-100, .light .text-white, .light .text-slate-200, .light .text-slate-300 {
+            color: #1e293b !important; /* slate-800 */
+        }
+        .light .text-slate-400, .light .text-slate-500 {
+            color: #475569 !important; /* slate-600 */
+        }
+        .light .bg-slate-900, .light .bg-slate-950, .light .bg-slate-900\/50, .light .bg-slate-900\/60, .light .bg-slate-950\/40, .light .bg-slate-950\/50, .light .bg-slate-950\/60 {
+            background-color: #f1f5f9 !important; /* slate-100 */
+            border-color: #cbd5e1 !important; /* slate-300 */
+        }
+        .light .bg-slate-800 {
+            background-color: #e2e8f0 !important; /* slate-200 */
+            color: #0f172a !important;
+        }
+        .light .bg-slate-800:hover {
+            background-color: #cbd5e1 !important; /* slate-300 */
+        }
+        .light .border-slate-800, .light .border-slate-900, .light .border-slate-800\/60, .light .border-slate-900\/50, .light .border-slate-800\/80 {
+            border-color: #cbd5e1 !important; /* slate-300 */
+        }
+        .light input, .light select, .light textarea {
+            background-color: #ffffff !important;
+            color: #0f172a !important;
+            border-color: #cbd5e1 !important;
+        }
+        .light input::placeholder, .light textarea::placeholder {
+            color: #94a3b8 !important;
+        }
+        .light .prose, .light .prose-invert {
+            color: #334155 !important;
+        }
+        /* Specific exceptions to keep original green/cyan indicators highly visible */
+        .light .text-cyan-400, .light .text-cyan-500, .light .text-cyan-600 {
+            color: #0284c7 !important; /* Darker cyan/sky for contrast */
+        }
+        .light .text-emerald-400, .light .text-emerald-500 {
+            color: #059669 !important; /* Darker emerald for contrast */
+        }
+        .light .text-amber-400, .light .text-amber-500 {
+            color: #d97706 !important; /* Darker amber for contrast */
+        }
+        .light .bg-cyan-950\/20, .light .bg-cyan-500\/10, .light .bg-cyan-500\/15 {
+            background-color: #e0f2fe !important; /* slate sky-100 */
+            border-color: #bae6fd !important;
+        }
+        .light .bg-emerald-950\/20, .light .bg-emerald-500\/10, .light .bg-emerald-500\/15 {
+            background-color: #d1fae5 !important; /* emerald-100 */
+            border-color: #a7f3d0 !important;
+        }
+        .light .bg-yellow-950\/20, .light .bg-yellow-500\/10 {
+            background-color: #fef3c7 !important; /* yellow-100 */
+            border-color: #fde68a !important;
+        }
     </style>
 </head>
-<body class="text-slate-100 min-h-screen flex flex-col font-sans selection:bg-cyan-500 selection:text-slate-900" :class="'theme-' + branding.theme_color" x-data="{
+<body class="text-slate-100 min-h-screen flex flex-col font-sans selection:bg-cyan-500 selection:text-slate-900" :class="(uiTheme === 'light' ? 'light ' : '') + 'theme-' + branding.theme_color" x-data="{
+    uiTheme: localStorage.getItem('ui_theme_override') || 'dark',
+    toggleTheme() {
+        this.uiTheme = this.uiTheme === 'light' ? 'dark' : 'light';
+        localStorage.setItem('ui_theme_override', this.uiTheme);
+    },
+    partialSections: {},
+    translateAgent(agent) {
+        const mapping = {
+            "market_research_specialist": "Especialista en Mercado",
+            "competitive_intelligence_analyst": "Analista de Competencia",
+            "customer_insights_researcher": "Especialista en Clientes",
+            "product_strategy_advisor": "Asesor de Producto",
+            "omission_analyst": "Analista de Omisiones",
+            "business_analyst": "Analista Principal de Negocios",
+            "devils_advocate": "Abogado del Diablo"
+        };
+        return mapping[agent] || agent;
+    },
     token: localStorage.getItem('token') || '',
     user: null,
     branding: {
@@ -202,6 +299,10 @@
     async init() {
         // Load public branding first
         await this.loadBranding();
+        // Fallback if no local storage preference exists
+        if (!localStorage.getItem('ui_theme_override')) {
+            this.uiTheme = this.branding.theme_color === 'light' ? 'light' : 'dark';
+        }
         // Load Public Stats
         await this.loadPublicStats();
         // Load Testimonials
@@ -924,6 +1025,7 @@
     },
 
     startPolling() {
+        this.partialSections = {};
         if (this.pollInterval) clearInterval(this.pollInterval);
         this.pollInterval = setInterval(async () => {
             try {
@@ -934,6 +1036,7 @@
 
                 this.statusMessage = data.message;
                 this.progressPercent = data.progress;
+                this.partialSections = data.partial_sections || {};
 
                 if (data.status === 'completed') {
                     clearInterval(this.pollInterval);
@@ -1214,6 +1317,28 @@
             </div>
         </div>
         <div class="flex items-center space-x-4">
+            <!-- Theme Toggle Button -->
+            <button @click="toggleTheme()" class="text-xs font-bold text-slate-300 hover:text-white px-3 py-1.5 rounded-lg border border-slate-800 bg-slate-950/40 flex items-center space-x-1" title="Alternar tema claro/oscuro">
+                <template x-if="uiTheme === 'light'">
+                    <span class="flex items-center space-x-1">
+                        <!-- Moon Icon -->
+                        <svg class="w-4 h-4 text-slate-700" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
+                        </svg>
+                        <span>Modo Oscuro</span>
+                    </span>
+                </template>
+                <template x-if="uiTheme !== 'light'">
+                    <span class="flex items-center space-x-1">
+                        <!-- Sun Icon -->
+                        <svg class="w-4 h-4 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464-4.95a1 1 0 111.414 1.414L14.14 7.636a1 1 0 11-1.414-1.414l.793-.793zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zm-4.95 4.536a1 1 0 111.414-1.414l.793.793a1 1 0 01-1.414 1.414l-.793-.793zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zm1.464 4.536l-.793.793a1 1 0 11-1.414-1.414l.793-.793a1 1 0 111.414 1.414zM10 16a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 5.05a1 1 0 011.414 0l.793.793a1 1 0 11-1.414 1.414l-.793-.793a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                        </svg>
+                        <span>Modo Claro</span>
+                    </span>
+                </template>
+            </button>
+
             <button @click="showDirectory = !showDirectory; if (showDirectory) { loadDirectory(); }" class="text-xs font-bold text-slate-300 hover:text-white px-3 py-1.5 rounded-lg border border-slate-800 bg-slate-950/40">
                 <span x-text="showDirectory ? 'Volver al Inicio' : 'Directorio de Fundadores'"></span>
             </button>
@@ -1683,6 +1808,28 @@
                             <p class="text-slate-400 text-sm mb-6" x-text="statusMessage"></p>
                             <div class="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
                                 <div class="bg-gradient-to-r from-cyan-500 to-emerald-500 h-full transition-all duration-500" :style="'width: ' + progressPercent + '%'"></div>
+                            </div>
+
+                            <!-- Real-time section reveal list -->
+                            <div class="mt-8 text-left space-y-3 max-w-md mx-auto" x-show="Object.keys(partialSections).length > 0">
+                                <h4 class="text-xs font-bold uppercase text-slate-400 tracking-wider">Secciones Generadas en Tiempo Real:</h4>
+                                <div class="space-y-2">
+                                    <template x-for="(content, agent) in partialSections" :key="agent">
+                                        <div class="p-3 bg-slate-900/60 border border-slate-800 rounded-xl animate-fade-in flex flex-col space-y-1.5">
+                                            <div class="flex justify-between items-center">
+                                                <span class="font-extrabold text-xs text-cyan-400" x-text="translateAgent(agent)"></span>
+                                                <span class="text-[9px] uppercase font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">Completado</span>
+                                            </div>
+                                            <!-- If key_points are present, show first bullet as sneak peek -->
+                                            <template x-if="content && content.key_points && content.key_points.length > 0">
+                                                <p class="text-[11px] text-slate-300 italic line-clamp-1" x-text="'&bull; ' + content.key_points[0]"></p>
+                                            </template>
+                                            <template x-if="content && typeof content === 'string'">
+                                                <p class="text-[11px] text-slate-300 italic line-clamp-1" x-text="content"></p>
+                                            </template>
+                                        </div>
+                                    </template>
+                                </div>
                             </div>
                         </div>
 

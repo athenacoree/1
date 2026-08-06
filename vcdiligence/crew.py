@@ -21,6 +21,10 @@ class WrappedCallback:
 
     def __call__(self, output):
         self.crew._log_and_check_budget(self.agent_name, self.agent_obj, output)
+        # Accumulate covered topics from specialists
+        self.crew._accumulate_covered_topics(output)
+        # Save partial section result to DB for real-time reveal
+        self.crew._save_partial_section(self.agent_name, output)
         if self.original_callback:
             self.original_callback(output)
 
@@ -41,6 +45,8 @@ def run_crew_with_rotation(inputs, task_callback=None, user_priorities=None, cus
             task_id=task_id
         )
         inputs["user_priorities_block"] = crew_obj.user_priorities_block
+        # Initialize covered topics block placeholder to prevent key errors
+        inputs["covered_topics_block"] = "Ningún tema cubierto aún."
         try:
             logger.info(f"Kicking off MarketResearchCrew (attempt {attempt + 1}/3) using provider: {crew_obj.provider_name}, key_id: {crew_obj.key_id}")
             result = crew_obj.crew().kickoff(inputs=inputs)
@@ -77,6 +83,7 @@ class MarketResearchCrew():
         self.db_session = db_session
         self.task_id = task_id
         self.accumulated_tokens_by_agent = {}
+        self.covered_topics = []
 
         self.llm, self.provider_name, self.key_id = LLMProviderManager.get_llm_from_pool(db_session=db_session)
         self.task_callback = task_callback
@@ -113,6 +120,98 @@ class MarketResearchCrew():
             self.user_priorities_block = "INSTRUCCIONES DE PRIORIDAD DEL USUARIO: " + " ".join(block_lines)
         else:
             self.user_priorities_block = ""
+
+    def _save_partial_section(self, agent_name: str, output):
+        """
+        Saves the partial output of a completed task to the Task model's partial_sections JSON.
+        """
+        if not self.db_session or not self.task_id:
+            return
+        try:
+            from vcdiligence.database import Task as DBTask
+            from sqlalchemy.orm.attributes import flag_modified
+            import json
+
+            task = self.db_session.query(DBTask).filter_by(id=self.task_id).first()
+            if task:
+                current_sections = task.partial_sections or {}
+
+                # Format findings or raw prose cleanly
+                content = ""
+                pydantic_res = getattr(output, "pydantic", None)
+                if pydantic_res:
+                    points = getattr(pydantic_res, "key_points", [])
+                    score = getattr(pydantic_res, "score", None)
+                    content = {
+                        "score": score,
+                        "key_points": points,
+                        "red_flags": getattr(pydantic_res, "red_flags", [])
+                    }
+                else:
+                    content = getattr(output, "raw", str(output))
+                    # Check if prose can be stripped/truncated safely for real-time display
+                    if isinstance(content, str):
+                        content = content.strip()
+
+                current_sections[agent_name] = content
+                task.partial_sections = current_sections
+                flag_modified(task, "partial_sections")
+                self.db_session.commit()
+                logger.info(f"Saved partial_section for agent {agent_name} in task {self.task_id}")
+        except Exception as e:
+            logger.error(f"Error in _save_partial_section for {agent_name}: {str(e)}")
+
+    def _accumulate_covered_topics(self, output):
+        """
+        Accumulates covered topics (key_points) from completed specialist tasks
+        to avoid duplication in business analyst and devil's advocate outputs.
+        """
+        import json
+        try:
+            # Look for AgentFinding object or dict containing key_points
+            pydantic_res = getattr(output, "pydantic", None)
+            if pydantic_res and hasattr(pydantic_res, "key_points") and pydantic_res.key_points:
+                for pt in pydantic_res.key_points:
+                    if pt and pt.strip() and pt.strip() not in self.covered_topics:
+                        self.covered_topics.append(pt.strip())
+            elif isinstance(output, AgentFinding):
+                for pt in output.key_points:
+                    if pt and pt.strip() and pt.strip() not in self.covered_topics:
+                        self.covered_topics.append(pt.strip())
+            elif hasattr(output, "raw") and output.raw:
+                try:
+                    loaded = json.loads(output.raw)
+                    if isinstance(loaded, dict) and "key_points" in loaded:
+                        for pt in loaded["key_points"]:
+                            if pt and pt.strip() and pt.strip() not in self.covered_topics:
+                                self.covered_topics.append(pt.strip())
+                except Exception:
+                    pass
+
+            # Build the covered topics block
+            if self.covered_topics:
+                bullets = "\n".join([f"- {pt}" for pt in self.covered_topics])
+                covered_topics_block = f"Temas ya cubiertos por especialistas:\n{bullets}"
+            else:
+                covered_topics_block = "Ningún tema cubierto aún."
+
+            # Inject this block dynamically into upcoming tasks
+            if hasattr(self, "_business_analyst_task_obj") and self._business_analyst_task_obj:
+                desc = self._business_analyst_task_obj.description
+                if "{covered_topics_block}" in desc:
+                    self._business_analyst_task_obj.description = desc.replace("{covered_topics_block}", covered_topics_block)
+                else:
+                    self._business_analyst_task_obj.description = desc + f"\n\n{covered_topics_block}"
+
+            if hasattr(self, "_devils_advocate_task_obj") and self._devils_advocate_task_obj:
+                desc = self._devils_advocate_task_obj.description
+                if "{covered_topics_block}" in desc:
+                    self._devils_advocate_task_obj.description = desc.replace("{covered_topics_block}", covered_topics_block)
+                else:
+                    self._devils_advocate_task_obj.description = desc + f"\n\n{covered_topics_block}"
+
+        except Exception as e:
+            logger.error(f"Error in _accumulate_covered_topics: {str(e)}")
 
     def _log_and_check_budget(self, agent_name: str, agent_obj: Agent, task_output):
         """
@@ -268,17 +367,19 @@ class MarketResearchCrew():
 
     @task
     def business_analyst_task(self) -> Task:
-        return Task(
+        self._business_analyst_task_obj = Task(
             config=self.tasks_config["business_analyst_task"],
             callback=WrappedCallback(self, "business_analyst", self.business_analyst(), self.task_callback)
         )
+        return self._business_analyst_task_obj
 
     @task
     def devils_advocate_task(self) -> Task:
-        return Task(
+        self._devils_advocate_task_obj = Task(
             config=self.tasks_config["devils_advocate_task"],
             callback=WrappedCallback(self, "devils_advocate", self.devils_advocate())
         )
+        return self._devils_advocate_task_obj
 
     @crew
     def crew(self) -> Crew:

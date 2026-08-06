@@ -112,6 +112,17 @@ def run_due_diligence_task(
         # Scrape company landing and internal pages first (needed for heuristics)
         payload = SmartScraper.analyze_startup(url)
 
+        # Build list of scanned pages and update progress message in real-time
+        internal_keys = [k for k in payload.get("internal_pages", {}).keys() if "-missing-page" not in k]
+        domain_name = SmartScraper.get_domain(url)
+        pages_scanned = [domain_name] + [domain_name + k for k in internal_keys]
+        scraped_formatted_str = ", ".join(pages_scanned)
+
+        task = db.query(Task).filter_by(id=f"{org_id}_{domain}").first()
+        if task:
+            task.message = f"Se consultaron estas páginas: {scraped_formatted_str}"
+            db.commit()
+
         internal_pages_text = ""
         for path, content in payload.get("internal_pages", {}).items():
             internal_pages_text += f"\n--- Page: {path} ---\n{content}\n"
@@ -177,7 +188,8 @@ def run_due_diligence_task(
             "pricing_and_product_insights": pricing_product[:2500],
             "market_and_funding_insights": market_funding[:2500],
             "team_and_founders_insights": team_founders[:2500],
-            "public_api_insights": public_insights_text[:3500]
+            "public_api_insights": public_insights_text[:3500],
+            "scraped_pages_list": "Páginas scrapeadas: " + scraped_formatted_str
         }
 
         # Run CrewAI kickoff with automatic rotation
