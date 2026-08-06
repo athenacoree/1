@@ -109,5 +109,84 @@ class TestCrewConfig(unittest.TestCase):
                 is_clean=True
             )
 
+    @mock.patch("vcdiligence.llm_manager.LLMProviderManager.get_llm_from_pool")
+    def test_covered_topics_injection(self, mock_get_llm_from_pool):
+        """Verify that covered_topics_block is correctly formatted as a bulleted list and injected."""
+        from vcdiligence.agent_schemas import AgentFinding
+        mock_llm = LLM(model="openai/gpt-4o-mini", api_key="dummy")
+        mock_get_llm_from_pool.return_value = (mock_llm, "openai", 1)
+
+        crew_obj = MarketResearchCrew()
+        # Initialize the upcoming tasks so they exist for description updates
+        crew_obj.business_analyst_task()
+        crew_obj.devils_advocate_task()
+
+        # Create sample AgentFinding results
+        finding_market = AgentFinding(
+            category="market",
+            score=80,
+            key_points=["Fuerte crecimiento de TAM en Latam", "Riesgos de compliance con GDPR"],
+            red_flags=[],
+            is_clean=True
+        )
+        finding_competition = AgentFinding(
+            category="competition",
+            score=70,
+            key_points=["Fuerte competencia de Stripe y Adyen"],
+            red_flags=[],
+            is_clean=True
+        )
+
+        # Call accumulation helper with specialist outputs
+        crew_obj._accumulate_covered_topics(finding_market)
+        crew_obj._accumulate_covered_topics(finding_competition)
+
+        # Assert covered_topics list contains accumulated items
+        self.assertIn("Fuerte crecimiento de TAM en Latam", crew_obj.covered_topics)
+        self.assertIn("Riesgos de compliance con GDPR", crew_obj.covered_topics)
+        self.assertIn("Fuerte competencia de Stripe y Adyen", crew_obj.covered_topics)
+
+        # Assert descriptions have been dynamically updated with the bulleted list
+        ba_desc = crew_obj._business_analyst_task_obj.description
+        da_desc = crew_obj._devils_advocate_task_obj.description
+
+        self.assertIn("Temas ya cubiertos por especialistas:", ba_desc)
+        self.assertIn("- Fuerte crecimiento de TAM en Latam", ba_desc)
+        self.assertIn("- Fuerte competencia de Stripe y Adyen", ba_desc)
+
+        self.assertIn("Temas ya cubiertos por especialistas:", da_desc)
+        self.assertIn("- Fuerte crecimiento de TAM en Latam", da_desc)
+        self.assertIn("- Fuerte competencia de Stripe y Adyen", da_desc)
+
+    def test_specialist_tasks_strict_rules(self):
+        """Verify that expected_output for the 5 specialist tasks contains the concrete metrics rules."""
+        import os
+        import yaml
+
+        base_path = os.path.dirname(os.path.dirname(__file__))
+        tasks_yaml_path = os.path.join(base_path, "vcdiligence", "config", "tasks.yaml")
+
+        with open(tasks_yaml_path, "r", encoding="utf-8") as f:
+            tasks_config = yaml.safe_load(f)
+
+        specialist_tasks = [
+            "market_research_task",
+            "competitive_intelligence_task",
+            "customer_insights_task",
+            "product_strategy_task",
+            "omission_analyst_task"
+        ]
+
+        for task_name in specialist_tasks:
+            self.assertIn(task_name, tasks_config, f"Missing task: {task_name}")
+            expected_output = tasks_config[task_name].get("expected_output", "")
+
+            # Assert strict rules are present in expected_output
+            self.assertIn("key_points", expected_output)
+            self.assertIn("número/estadística", expected_output)
+            self.assertIn("enlace/URL", expected_output)
+            self.assertIn("acción recomendada", expected_output)
+            self.assertIn("Prohibido usar frases genéricas", expected_output)
+
 if __name__ == "__main__":
     unittest.main()

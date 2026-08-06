@@ -5,7 +5,53 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
+from reportlab.graphics.shapes import Drawing
+from reportlab.graphics.charts.barcharts import VerticalBarChart
 from vcdiligence.logging_config import logger
+
+def create_sub_scores_chart(sub_scores: dict, primary_color, secondary_color) -> Drawing:
+    """
+    Creates a bar chart showcasing the 5 sub-scores for the PDF document.
+    """
+    # Create Drawing container (6.5 inches is 468 points, height 160)
+    d = Drawing(468, 160)
+
+    chart = VerticalBarChart()
+    chart.x = 45
+    chart.y = 20
+    chart.height = 110
+    chart.width = 380
+
+    # Categories showing the 5 sub-scores
+    categories = ["Market", "Team", "Product", "Traction", "Risk/Legal"]
+    data_keys = ["market", "team", "product", "traction", "risk_legal_omissions"]
+
+    data_values = []
+    for key in data_keys:
+        val = sub_scores.get(key, 80)
+        try:
+            data_values.append(int(val))
+        except (ValueError, TypeError):
+            data_values.append(80)
+
+    chart.data = [data_values]
+    chart.categoryAxis.categoryNames = categories
+    chart.categoryAxis.labels.fontSize = 8
+    chart.categoryAxis.labels.dy = -10
+
+    # Value axis configuration (0-100)
+    chart.valueAxis.valueMin = 0
+    chart.valueAxis.valueMax = 100
+    chart.valueAxis.valueStep = 20
+    chart.valueAxis.labels.fontSize = 8
+
+    # Style bars
+    chart.bars[0].fillColor = primary_color
+    chart.bars[0].strokeColor = secondary_color
+    chart.bars[0].strokeWidth = 0.5
+
+    d.add(chart)
+    return d
 
 def generate_report_pdf(
     report_data: dict,
@@ -159,6 +205,18 @@ def generate_report_pdf(
     ]))
     story.append(summary_table)
     story.append(Spacer(1, 15))
+
+    # Draw the Sub-Scores Bar Chart immediately after the summary table
+    try:
+        chart_drawing = create_sub_scores_chart(sub_scores, primary_color, secondary_color)
+        story.append(chart_drawing)
+        story.append(Spacer(1, 15))
+    except Exception as chart_err:
+        logger.error(f"Error appending sub-scores chart to PDF: {str(chart_err)}")
+
+    # TODO: Si en el futuro se agregan campos numéricos estructurados de TAM/SAM/SOM al AgentFinding,
+    # se podría crear e insertar aquí una segunda gráfica de barras / financiera para representar
+    # estos datos financieros de forma visual y profesional.
 
     # 2b. Triggered Conditional Sources (for transparency)
     triggered_sources = report_data.get("triggered_conditional_sources", [])

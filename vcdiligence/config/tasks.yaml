@@ -8,6 +8,7 @@ market_research_task:
     {user_priorities_block}
   expected_output: >
     Entrega SOLO los hallazgos clave estructurados en un objeto que contenga la categoría (market), un score de 0 a 100, 3-6 bullets cortos (key_points) sin párrafos narrativos extensos, una lista de red_flags si existen y un booleano is_clean indicando si no se detectaron problemas relevantes. El reporte final en prosa lo genera otro agente después.
+    Cada elemento de key_points debe incluir al menos UNO de los siguientes: un número/estadística concreta, un enlace/URL de referencia, o una acción recomendada específica. Prohibido usar frases genéricas sin sustento como 'la empresa enfrenta riesgos regulatorios' sin especificar CUÁLES riesgos, en qué mercado, o con qué fuente. Si no tienes un dato concreto para un punto, es preferible omitirlo a incluir relleno genérico.
   agent: market_research_specialist
 
 competitive_intelligence_task:
@@ -19,6 +20,7 @@ competitive_intelligence_task:
     {user_priorities_block}
   expected_output: >
     Entrega SOLO los hallazgos clave estructurados en un objeto que contenga la categoría (competition), un score de 0 a 100, 3-6 bullets cortos (key_points) sin párrafos narrativos extensos, una lista de red_flags si existen y un booleano is_clean indicando si no se detectaron problemas relevantes. El reporte final en prosa lo genera otro agente después.
+    Cada elemento de key_points debe incluir al menos UNO de los siguientes: un número/estadística concreta, un enlace/URL de referencia, o una acción recomendada específica. Prohibido usar frases genéricas sin sustento como 'la empresa enfrenta riesgos regulatorios' sin especificar CUÁLES riesgos, en qué mercado, o con qué fuente. Si no tienes un dato concreto para un punto, es preferible omitirlo a incluir relleno genérico.
   agent: competitive_intelligence_analyst
 
 customer_insights_task:
@@ -30,6 +32,7 @@ customer_insights_task:
     {user_priorities_block}
   expected_output: >
     Entrega SOLO los hallazgos clave estructurados en un objeto que contenga la categoría (customer), un score de 0 a 100, 3-6 bullets cortos (key_points) sin párrafos narrativos extensos, una lista de red_flags si existen y un booleano is_clean indicando si no se detectaron problemas relevantes. El reporte final en prosa lo genera otro agente después.
+    Cada elemento de key_points debe incluir al menos UNO de los siguientes: un número/estadística concreta, un enlace/URL de referencia, o una acción recomendada específica. Prohibido usar frases genéricas sin sustento como 'la empresa enfrenta riesgos regulatorios' sin especificar CUÁLES riesgos, en qué mercado, o con qué fuente. Si no tienes un dato concreto para un punto, es preferible omitirlo a incluir relleno genérico.
   agent: customer_insights_researcher
 
 product_strategy_task:
@@ -41,6 +44,7 @@ product_strategy_task:
     {user_priorities_block}
   expected_output: >
     Entrega SOLO los hallazgos clave estructurados en un objeto que contenga la categoría (product), un score de 0 a 100, 3-6 bullets cortos (key_points) sin párrafos narrativos extensos, una lista de red_flags si existen y un booleano is_clean indicando si no se detectaron problemas relevantes. El reporte final en prosa lo genera otro agente después.
+    Cada elemento de key_points debe incluir al menos UNO de los siguientes: un número/estadística concreta, un enlace/URL de referencia, o una acción recomendada específica. Prohibido usar frases genéricas sin sustento como 'la empresa enfrenta riesgos regulatorios' sin especificar CUÁLES riesgos, en qué mercado, o con qué fuente. Si no tienes un dato concreto para un punto, es preferible omitirlo a incluir relleno genérico.
   agent: product_strategy_advisor
 
 omission_analyst_task:
@@ -54,6 +58,7 @@ omission_analyst_task:
     {user_priorities_block}
   expected_output: >
     Entrega SOLO los hallazgos clave estructurados en un objeto que contenga la categoría (omissions), un score de 0 a 100, 3-6 bullets cortos (key_points) sin párrafos narrativos extensos, una lista de red_flags si existen y un booleano is_clean indicando si no se detectaron problemas de omisiones relevantes. El reporte final en prosa lo genera otro agente después.
+    Cada elemento de key_points debe incluir al menos UNO de los siguientes: un número/estadística concreta, un enlace/URL de referencia, o una acción recomendada específica. Prohibido usar frases genéricas sin sustento como 'la empresa enfrenta riesgos regulatorios' sin especificar CUÁLES riesgos, en qué mercado, o con qué fuente. Si no tienes un dato concreto para un punto, es preferible omitirlo a incluir relleno genérico.
   agent: omission_analyst
 
 business_analyst_task:
@@ -63,6 +68,10 @@ business_analyst_task:
 
     You will receive the structured AgentFinding outputs from the prior specialist tasks (Market Research, Competitive Intelligence, Customer Insights, Product Strategy, and Omission Analyst).
     Your instruction is: Sintetiza estos hallazgos estructurados en un memo profesional en prosa. Para cada sección (Market, Competition, Team, Product, Financials/Pricing, y Señales por Ausencia), si el hallazgo correspondiente de la sección tiene is_clean=True y red_flags vacío, escribe un párrafo breve (2-4 frases) confirmando que no se detectaron problemas. Si hay red_flags o hallazgos relevantes (is_clean=False o key_points), profundiza esa sección con más detalle en prosa.
+
+    Estos son los puntos que los especialistas YA identificaron: {covered_topics_block}. Tu trabajo es SINTETIZAR y EXPANDIR estos puntos en prosa, no repetirlos literalmente ni generar puntos nuevos que dupliquen su contenido.
+
+    Incluye estas páginas en la sección 'Fuentes Consultadas' (o 'Sources Consulted') junto a las URLs de fuentes de registros públicos externos: {scraped_pages_list}. Deben aparecer combinadas en la misma sección, diferenciando claramente cuáles son datos scrapeados del sitio de la empresa vs. registros públicos externos.
 
     Your report MUST start with exactly three distinct lines at the very top for UI parsing:
     "INVESTMENT_SCORE: [0-100]"
@@ -93,6 +102,8 @@ devils_advocate_task:
     - If negative (NO-GO): Argue the best possible case IN FAVOR of investing. Focus on asymmetric upside, underestimated moats, niche market positioning, or positive signals from public API records.
 
     You must NOT alter the original score or recommendation. Your analysis must be formatted under a new section titled "Caso a Favor vs. Caso en Contra" (Case For vs. Case Against) or "Análisis Contradictorio" (Contradictory Analysis).
+
+    Estos son los puntos que los especialistas YA identificaron: {covered_topics_block}. Tu trabajo es SINTETIZAR y EXPANDIR estos puntos en prosa, no repetirlos literalmente ni generar puntos nuevos que dupliquen su contenido.
 
     {user_priorities_block}
   expected_output: >

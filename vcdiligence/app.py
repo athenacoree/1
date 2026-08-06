@@ -1117,6 +1117,7 @@ def upload_and_analyze(
 def get_status(task_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
     Get status of task. Enforce tenant isolation.
+    Now also includes partial_sections for section-by-section real-time updates.
     """
     task = db.query(Task).filter_by(id=task_id).first()
     if not task:
@@ -1129,7 +1130,8 @@ def get_status(task_id: str, current_user: User = Depends(get_current_user), db:
         "status": task.status,
         "progress": task.progress,
         "message": task.message,
-        "result": task.result_json
+        "result": task.result_json,
+        "partial_sections": task.partial_sections
     }
 
 # ----------------- REPORTS & MANAGEMENT ENDPOINTS -----------------
