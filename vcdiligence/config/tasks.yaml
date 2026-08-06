@@ -5,10 +5,14 @@ market_research_task:
     Assess the external web insights gathered: {market_and_funding_insights}.
     Identify the market sector, estimated TAM, SAM, SOM, maturity stage, key growth drivers, and any regulatory issues.
 
+    Todo tu output (incluyendo key_points, red_flags, y el memo final en prosa) debe estar ÍNTEGRAMENTE en {output_language}. No mezcles idiomas bajo ninguna circunstancia, incluso si las fuentes originales están en otro idioma — traduce la información al idioma solicitado.
+
     {user_priorities_block}
   expected_output: >
-    Entrega SOLO los hallazgos clave estructurados en un objeto que contenga la categoría (market), un score de 0 a 100, 3-6 bullets cortos (key_points) sin párrafos narrativos extensos, una lista de red_flags si existen y un booleano is_clean indicando si no se detectaron problemas relevantes. El reporte final en prosa lo genera otro agente después.
+    Entrega SOLO los hallazgos clave estructurados en un objeto que contenga la categoría (market), un score de 0 a 100, 3-6 bullets cortos (key_points) sin párrafos narrativos extensos, una lista de red_flags si existen, un booleano is_clean indicando si no se detectaron problemas relevantes, y una lista de 'sources' (SourceItem) con las URLs específicas y reales que usaste para respaldar tus hallazgos de ESA sección en particular.
+    Todo tu output (incluyendo key_points, red_flags, y el memo final en prosa) debe estar ÍNTEGRAMENTE en {output_language}. No mezcles idiomas bajo ninguna circunstancia, incluso si las fuentes originales están en otro idioma — traduce la información al idioma solicitado.
     Cada elemento de key_points debe incluir al menos UNO de los siguientes: un número/estadística concreta, un enlace/URL de referencia, o una acción recomendada específica. Prohibido usar frases genéricas sin sustento como 'la empresa enfrenta riesgos regulatorios' sin especificar CUÁLES riesgos, en qué mercado, o con qué fuente. Si no tienes un dato concreto para un punto, es preferible omitirlo a incluir relleno genérico.
+    Para cada fuente en 'sources', incluye: 'url' (la URL específica usada), 'name' (nombre legible, ej 'Sitio oficial de OpenAI') y 'date_accessed' (formato YYYY-MM-DD).
   agent: market_research_specialist
 
 competitive_intelligence_task:
@@ -17,10 +21,14 @@ competitive_intelligence_task:
     Examine competitor insights from search: {competitor_insights}.
     Identify direct and indirect competitors. Outline the startup's unique value proposition, positioning strategy, features compared to industry standard, and possible market entry gaps.
 
+    Todo tu output (incluyendo key_points, red_flags, y el memo final en prosa) debe estar ÍNTEGRAMENTE en {output_language}. No mezcles idiomas bajo ninguna circunstancia, incluso si las fuentes originales están en otro idioma — traduce la información al idioma solicitado.
+
     {user_priorities_block}
   expected_output: >
-    Entrega SOLO los hallazgos clave estructurados en un objeto que contenga la categoría (competition), un score de 0 a 100, 3-6 bullets cortos (key_points) sin párrafos narrativos extensos, una lista de red_flags si existen y un booleano is_clean indicando si no se detectaron problemas relevantes. El reporte final en prosa lo genera otro agente después.
+    Entrega SOLO los hallazgos clave estructurados en un objeto que contenga la categoría (competition), un score de 0 a 100, 3-6 bullets cortos (key_points) sin párrafos narrativos extensos, una lista de red_flags si existen, un booleano is_clean indicando si no se detectaron problemas relevantes, y una lista de 'sources' (SourceItem) con las URLs específicas y reales que usaste para respaldar tus hallazgos de ESA sección en particular.
+    Todo tu output (incluyendo key_points, red_flags, y el memo final en prosa) debe estar ÍNTEGRAMENTE en {output_language}. No mezcles idiomas bajo ninguna circunstancia, incluso si las fuentes originales están en otro idioma — traduce la información al idioma solicitado.
     Cada elemento de key_points debe incluir al menos UNO de los siguientes: un número/estadística concreta, un enlace/URL de referencia, o una acción recomendada específica. Prohibido usar frases genéricas sin sustento como 'la empresa enfrenta riesgos regulatorios' sin especificar CUÁLES riesgos, en qué mercado, o con qué fuente. Si no tienes un dato concreto para un punto, es preferible omitirlo a incluir relleno genérico.
+    Para cada fuente en 'sources', incluye: 'url' (la URL específica usada), 'name' (nombre legible, ej 'Sitio oficial de OpenAI') y 'date_accessed' (formato YYYY-MM-DD).
   agent: competitive_intelligence_analyst
 
 customer_insights_task:
@@ -29,10 +37,14 @@ customer_insights_task:
     Analyze pricing/product reviews and customer feedback trends: {pricing_and_product_insights}.
     Formulate the primary and secondary buyer personas, core user needs solved, customer journey, and strategic growth recommendations.
 
+    Todo tu output (incluyendo key_points, red_flags, y el memo final en prosa) debe estar ÍNTEGRAMENTE en {output_language}. No mezcles idiomas bajo ninguna circunstancia, incluso si las fuentes originales están en otro idioma — traduce la información al idioma solicitado.
+
     {user_priorities_block}
   expected_output: >
-    Entrega SOLO los hallazgos clave estructurados en un objeto que contenga la categoría (customer), un score de 0 a 100, 3-6 bullets cortos (key_points) sin párrafos narrativos extensos, una lista de red_flags si existen y un booleano is_clean indicando si no se detectaron problemas relevantes. El reporte final en prosa lo genera otro agente después.
+    Entrega SOLO los hallazgos clave estructurados en un objeto que contenga la categoría (customer), un score de 0 a 100, 3-6 bullets cortos (key_points) sin párrafos narrativos extensos, una lista de red_flags si existen, un booleano is_clean indicando si no se detectaron problemas relevantes, y una lista de 'sources' (SourceItem) con las URLs específicas y reales que usaste para respaldar tus hallazgos de ESA sección en particular.
+    Todo tu output (incluyendo key_points, red_flags, y el memo final en prosa) debe estar ÍNTEGRAMENTE en {output_language}. No mezcles idiomas bajo ninguna circunstancia, incluso si las fuentes originales están en otro idioma — traduce la información al idioma solicitado.
     Cada elemento de key_points debe incluir al menos UNO de los siguientes: un número/estadística concreta, un enlace/URL de referencia, o una acción recomendada específica. Prohibido usar frases genéricas sin sustento como 'la empresa enfrenta riesgos regulatorios' sin especificar CUÁLES riesgos, en qué mercado, o con qué fuente. Si no tienes un dato concreto para un punto, es preferible omitirlo a incluir relleno genérico.
+    Para cada fuente en 'sources', incluye: 'url' (la URL específica usada), 'name' (nombre legible, ej 'Sitio oficial de OpenAI') y 'date_accessed' (formato YYYY-MM-DD).
   agent: customer_insights_researcher
 
 product_strategy_task:
@@ -41,10 +53,14 @@ product_strategy_task:
     Use the homepage description: {homepage_summary} and internal pricing/product details: {pricing_and_product_insights}.
     Analyze MVP feature scope, unique technical differentiators, and possible technical risks or scalability challenges.
 
+    Todo tu output (incluyendo key_points, red_flags, y el memo final en prosa) debe estar ÍNTEGRAMENTE en {output_language}. No mezcles idiomas bajo ninguna circunstancia, incluso si las fuentes originales están en otro idioma — traduce la información al idioma solicitado.
+
     {user_priorities_block}
   expected_output: >
-    Entrega SOLO los hallazgos clave estructurados en un objeto que contenga la categoría (product), un score de 0 a 100, 3-6 bullets cortos (key_points) sin párrafos narrativos extensos, una lista de red_flags si existen y un booleano is_clean indicando si no se detectaron problemas relevantes. El reporte final en prosa lo genera otro agente después.
+    Entrega SOLO los hallazgos clave estructurados en un objeto que contenga la categoría (product), un score de 0 a 100, 3-6 bullets cortos (key_points) sin párrafos narrativos extensos, una lista de red_flags si existen, un booleano is_clean indicando si no se detectaron problemas relevantes, y una lista de 'sources' (SourceItem) con las URLs específicas y reales que usaste para respaldar tus hallazgos de ESA sección en particular.
+    Todo tu output (incluyendo key_points, red_flags, y el memo final en prosa) debe estar ÍNTEGRAMENTE en {output_language}. No mezcles idiomas bajo ninguna circunstancia, incluso si las fuentes originales están en otro idioma — traduce la información al idioma solicitado.
     Cada elemento de key_points debe incluir al menos UNO de los siguientes: un número/estadística concreta, un enlace/URL de referencia, o una acción recomendada específica. Prohibido usar frases genéricas sin sustento como 'la empresa enfrenta riesgos regulatorios' sin especificar CUÁLES riesgos, en qué mercado, o con qué fuente. Si no tienes un dato concreto para un punto, es preferible omitirlo a incluir relleno genérico.
+    Para cada fuente en 'sources', incluye: 'url' (la URL específica usada), 'name' (nombre legible, ej 'Sitio oficial de OpenAI') y 'date_accessed' (formato YYYY-MM-DD).
   agent: product_strategy_advisor
 
 omission_analyst_task:
@@ -55,10 +71,14 @@ omission_analyst_task:
 
     Calculate and analyze the density of vague language/superlatives (e.g. "revolutionary", "game-changing", "market leader", "world-class") compared to the density of concrete figures and metrics.
 
+    Todo tu output (incluyendo key_points, red_flags, y el memo final en prosa) debe estar ÍNTEGRAMENTE en {output_language}. No mezcles idiomas bajo ninguna circunstancia, incluso si las fuentes originales están en otro idioma — traduce la información al idioma solicitado.
+
     {user_priorities_block}
   expected_output: >
-    Entrega SOLO los hallazgos clave estructurados en un objeto que contenga la categoría (omissions), un score de 0 a 100, 3-6 bullets cortos (key_points) sin párrafos narrativos extensos, una lista de red_flags si existen y un booleano is_clean indicando si no se detectaron problemas de omisiones relevantes. El reporte final en prosa lo genera otro agente después.
+    Entrega SOLO los hallazgos clave estructurados en un objeto que contenga la categoría (omissions), un score de 0 a 100, 3-6 bullets cortos (key_points) sin párrafos narrativos extensos, una lista de red_flags si existen, un booleano is_clean indicando si no se detectaron problemas de omisiones relevantes, y una lista de 'sources' (SourceItem) con las URLs específicas y reales que usaste para respaldar tus hallazgos de ESA sección en particular.
+    Todo tu output (incluyendo key_points, red_flags, y el memo final en prosa) debe estar ÍNTEGRAMENTE en {output_language}. No mezcles idiomas bajo ninguna circunstancia, incluso si las fuentes originales están en otro idioma — traduce la información al idioma solicitado.
     Cada elemento de key_points debe incluir al menos UNO de los siguientes: un número/estadística concreta, un enlace/URL de referencia, o una acción recomendada específica. Prohibido usar frases genéricas sin sustento como 'la empresa enfrenta riesgos regulatorios' sin especificar CUÁLES riesgos, en qué mercado, o con qué fuente. Si no tienes un dato concreto para un punto, es preferible omitirlo a incluir relleno genérico.
+    Para cada fuente en 'sources', incluye: 'url' (la URL específica usada), 'name' (nombre legible, ej 'Sitio oficial de OpenAI') y 'date_accessed' (formato YYYY-MM-DD).
   agent: omission_analyst
 
 business_analyst_task:
@@ -71,7 +91,14 @@ business_analyst_task:
 
     Estos son los puntos que los especialistas YA identificaron: {covered_topics_block}. Tu trabajo es SINTETIZAR y EXPANDIR estos puntos en prosa, no repetirlos literalmente ni generar puntos nuevos que dupliquen su contenido.
 
-    Incluye estas páginas en la sección 'Fuentes Consultadas' (o 'Sources Consulted') junto a las URLs de fuentes de registros públicos externos: {scraped_pages_list}. Deben aparecer combinadas en la misma sección, diferenciando claramente cuáles son datos scrapeados del sitio de la empresa vs. registros públicos externos.
+    Todo tu output (incluyendo key_points, red_flags, y el memo final en prosa) debe estar ÍNTEGRAMENTE en {output_language}. No mezcles idiomas bajo ninguna circunstancia, incluso si las fuentes originales están en otro idioma — traduce la información al idioma solicitado.
+
+    RESTRICCIÓN ANTI-GENÉRICO: Está estrictamente prohibido usar frases genéricas sin sustento como "riesgos regulatorios", "intensa competencia" o "falta de transparencia" sin especificar el dato concreto que lo respalda (nombre de competidor específico, cifra concreta, o cita textual corta de una fuente).
+    RESTRICCIÓN DE NO REPETICIÓN: No repitas la misma idea en más de una sección. Si ya mencionaste un dato o riesgo en una sección anterior del memo, en las siguientes secciones donde sea relevante debes profundizar en un ÁNGULO DISTINTO de ese mismo dato (impacto financiero, impacto operativo, cómo se compara con la competencia, etc.), nunca repetir la misma frase o idea parafraseada.
+
+    En vez de agrupar todo en una sección final "Fuentes Consultadas" o "Sources Consulted", debes insertar al final de CADA subsección del Deep Dive (Market, Competition, Team, Product, Financials/Pricing) un bloque corto con las fuentes específicas de esa subsección (las cuales obtienes de la propiedad 'sources' del hallazgo del especialista correspondiente), usando este formato exacto en español:
+    **Fuentes de esta sección:** [Nombre de fuente](url) (consultado DD-MM-YYYY), [Nombre de fuente 2](url) (consultado DD-MM-YYYY)
+    Si una subsección no tiene fuentes, no agregues el bloque de fuentes. Elimina por completo cualquier sección "Fuentes Consultadas" o "Sources Consulted" del final del reporte, ya que ahora las fuentes van distribuidas en su lugar correspondiente.
 
     Your report MUST start with exactly three distinct lines at the very top for UI parsing:
     "INVESTMENT_SCORE: [0-100]"
@@ -90,6 +117,7 @@ business_analyst_task:
     {user_priorities_block}
   expected_output: >
     A comprehensive, professional investment memo starting with 'INVESTMENT_SCORE: XX', 'RECOMMENDATION: YY', and 'SUB_SCORES: ZZ' followed by a deep-dive analysis of market, product, competition, team, financials, the 'Señales por Ausencia' section, risk matrix, sub-scores breakdown, and strategic next steps.
+    Todo tu output (incluyendo key_points, red_flags, y el memo final en prosa) debe estar ÍNTEGRAMENTE en {output_language}. No mezcles idiomas bajo ninguna circunstancia, incluso si las fuentes originales están en otro idioma — traduce la información al idioma solicitado.
   agent: business_analyst
 
 devils_advocate_task:
@@ -101,6 +129,10 @@ devils_advocate_task:
     - If positive (GO or CONDITIONAL): Argue the best possible case AGAINST investing. Focus on critical risks, industry headwinds, missing metrics, team red flags, or potential competitive threats.
     - If negative (NO-GO): Argue the best possible case IN FAVOR of investing. Focus on asymmetric upside, underestimated moats, niche market positioning, or positive signals from public API records.
 
+    Todo tu output (incluyendo key_points, red_flags, y el memo final en prosa) debe estar ÍNTEGRAMENTE en {output_language}. No mezcles idiomas bajo ninguna circunstancia, incluso si las fuentes originales están en otro idioma — traduce la información al idioma solicitado.
+
+    RESTRICCIÓN ANTI-GENÉRICO: Está estrictamente prohibido usar frases genéricas sin sustento como "riesgos regulatorios", "intensa competencia" o "falta de transparencia" sin especificar el dato concreto que lo respalda (nombre de competidor específico, cifra concreta, o cita textual corta de una fuente).
+
     You must NOT alter the original score or recommendation. Your analysis must be formatted under a new section titled "Caso a Favor vs. Caso en Contra" (Case For vs. Case Against) or "Análisis Contradictorio" (Contradictory Analysis).
 
     Estos son los puntos que los especialistas YA identificaron: {covered_topics_block}. Tu trabajo es SINTETIZAR y EXPANDIR estos puntos en prosa, no repetirlos literalmente ni generar puntos nuevos que dupliquen su contenido.
@@ -108,4 +140,5 @@ devils_advocate_task:
     {user_priorities_block}
   expected_output: >
     A section titled "Caso a Favor vs. Caso en Contra" containing a highly detailed, professional, and convincing debate/contra-argument contesting the consensus recommendation without changing the final score/recommendation.
+    Todo tu output (incluyendo key_points, red_flags, y el memo final en prosa) debe estar ÍNTEGRAMENTE en {output_language}. No mezcles idiomas bajo ninguna circunstancia, incluso si las fuentes originales están en otro idioma — traduce la información al idioma solicitado.
   agent: devils_advocate

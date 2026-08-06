@@ -115,6 +115,7 @@ class AnalyzeRequest(BaseModel):
     linkedin_url: Optional[str] = None
     receive_whatsapp: Optional[bool] = False
     whatsapp_number: Optional[str] = None
+    language: Optional[str] = "es"
 
 class SearchCompanyRequest(BaseModel):
     company_name: str
@@ -491,6 +492,38 @@ def list_error_reports(current_user: User = Depends(require_admin), db: Session 
         } for r in reports
     ]
 
+@app.post("/reports/{domain}/send-to-notion")
+def send_report_to_notion(domain: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Exports the report details into the configured Notion database."""
+    report = db.query(Report).filter_by(domain=domain, organization_id=current_user.organization_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    from vcdiligence.integrations import send_to_notion
+
+    report_data_dict = {
+        "company_name": report.company_name,
+        "score": report.score,
+        "recommendation": report.recommendation,
+        "sub_scores": report.sub_scores,
+        "report_md": report.report_md
+    }
+
+    success = send_to_notion(report_data_dict)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to export report to Notion. Check server configuration or database parameters.")
+
+    return {"status": "success", "message": f"Successfully exported report for {report.company_name} to Notion."}
+
+@app.get("/config/integrations-status")
+def get_integrations_status():
+    """Exposes status of third-party integrations config."""
+    notion_key = os.getenv("NOTION_API_KEY")
+    notion_db = os.getenv("NOTION_DATABASE_ID")
+    return {
+        "notion_configured": bool(notion_key and notion_db)
+    }
+
 # ----------------- PUBLIC STATS ENDPOINT -----------------
 
 @app.get("/stats")
@@ -742,7 +775,8 @@ def start_analysis(
             "recommendation": existing_report.recommendation,
             "report_md": existing_report.report_md,
             "llm_provider": existing_report.llm_provider,
-            "pdf_path": f"/reports/{domain}/pdf"
+            "pdf_path": f"/reports/{domain}/pdf",
+            "screenshot_gallery": existing_report.screenshot_gallery
         }
         # Also ensure a Task exists with completed status
         task_id = f"{current_user.organization_id}_{domain}"
@@ -802,6 +836,7 @@ def start_analysis(
     )
     db.add(audit)
 
+    lang = req.language or "es"
     # Create new Task row in Database
     task = db.query(Task).filter_by(id=task_id).first()
     if not task:
@@ -811,6 +846,7 @@ def start_analysis(
             status="starting",
             progress=5,
             message="Starting due diligence agent network...",
+            language=lang,
             organization_id=current_user.organization_id
         )
         db.add(task)
@@ -818,6 +854,7 @@ def start_analysis(
         task.status = "starting"
         task.progress = 5
         task.message = "Restarting analysis..."
+        task.language = lang
         task.result_json = None
     db.commit()
 
@@ -850,7 +887,8 @@ def start_analysis(
         notify_email=req.notify_email,
         user_enabled_sources=current_user.enabled_sources,
         user_priorities=current_user.analysis_priorities,
-        custom_focus_keywords=current_user.custom_focus_keywords
+        custom_focus_keywords=current_user.custom_focus_keywords,
+        language=lang
     )
 
     return {"status": "running", "task_id": task_id}
@@ -931,6 +969,7 @@ def upload_and_analyze(
     notify_email: Optional[str] = Form(None),
     receive_whatsapp: Optional[bool] = Form(False),
     whatsapp_number: Optional[str] = Form(None),
+    language: Optional[str] = Form("es"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -1016,7 +1055,8 @@ def upload_and_analyze(
             "recommendation": existing_report.recommendation,
             "report_md": existing_report.report_md,
             "llm_provider": existing_report.llm_provider,
-            "pdf_path": f"/reports/{domain}/pdf"
+            "pdf_path": f"/reports/{domain}/pdf",
+            "screenshot_gallery": existing_report.screenshot_gallery
         }
         task_id = f"{current_user.organization_id}_{domain}"
         task = db.query(Task).filter_by(id=task_id).first()
@@ -1073,6 +1113,7 @@ def upload_and_analyze(
     )
     db.add(audit)
 
+    lang = language or "es"
     task = db.query(Task).filter_by(id=task_id).first()
     if not task:
         task = Task(
@@ -1081,6 +1122,7 @@ def upload_and_analyze(
             status="starting",
             progress=5,
             message="Starting due diligence from pitch deck...",
+            language=lang,
             organization_id=current_user.organization_id
         )
         db.add(task)
@@ -1088,6 +1130,7 @@ def upload_and_analyze(
         task.status = "starting"
         task.progress = 5
         task.message = "Restarting analysis from pitch deck..."
+        task.language = lang
         task.result_json = None
     db.commit()
 
@@ -1107,7 +1150,8 @@ def upload_and_analyze(
         notify_email=notify_email,
         user_enabled_sources=current_user.enabled_sources,
         user_priorities=current_user.analysis_priorities,
-        custom_focus_keywords=current_user.custom_focus_keywords
+        custom_focus_keywords=current_user.custom_focus_keywords,
+        language=lang
     )
 
     return {"status": "running", "task_id": task_id}
@@ -1149,6 +1193,7 @@ def list_reports(current_user: User = Depends(get_current_user), db: Session = D
             "score": r.score,
             "sub_scores": r.sub_scores,
             "recommendation": r.recommendation,
+            "screenshot_gallery": r.screenshot_gallery,
             "created_at": r.created_at.isoformat()
         } for r in reports
     ]

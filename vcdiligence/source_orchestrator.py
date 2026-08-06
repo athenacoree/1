@@ -226,3 +226,97 @@ def run_orchestrated_analysis(
 
     combined_results["triggered_conditional_sources"] = triggered_list_explained
     return combined_results
+
+def search_founders_and_team(
+    company_name: str,
+    scraped_text: str,
+    search_results: list = None
+) -> list:
+    """
+    Searches for and identifies the name of the founder/CEO and executive team
+    using scraped website content and search results. Saves: name, role, LinkedIn URL.
+    Does NOT store photos of people.
+    """
+    found_people = []
+    seen_linkedins = set()
+
+    # Process DuckDuckGo/LinkedIn search results if available
+    if search_results and isinstance(search_results, list):
+        for r in search_results:
+            link = r.get("link", "") or ""
+            title = r.get("title", "") or ""
+            snippet = r.get("snippet", "") or ""
+
+            # Check for individual LinkedIn profile
+            if "linkedin.com/in/" in link.lower():
+                clean_link = link.split("?")[0].split("#")[0]
+                if clean_link in seen_linkedins:
+                    continue
+                seen_linkedins.add(clean_link)
+
+                name = ""
+                role = "Executive"
+
+                # Split title by usual delimiters to extract name and role
+                parts = re.split(r'\s+[\-\|–]\s+', title)
+                if parts:
+                    candidate_name = parts[0].strip()
+                    # Ensure candidate name isn't just the company name
+                    if len(candidate_name) > 2 and company_name.lower() not in candidate_name.lower():
+                        name = candidate_name
+
+                    # Search for role in other title parts
+                    for part in parts[1:]:
+                        part_clean = part.lower()
+                        if any(kw in part_clean for kw in ["founder", "ceo", "cto", "co-founder", "cfo", "director", "vp", "president", "lead", "manager", "head", "fundador", "fundadora"]):
+                            role = part.strip()
+                            role = re.sub(r'\s*[\-\|]\s*LinkedIn.*$', '', role, flags=re.IGNORECASE).strip()
+                            break
+
+                # Fallback to URL path for name if title extraction failed or was too short
+                if not name:
+                    match = re.search(r'/in/([a-zA-Z0-9\-–_]+)', clean_link)
+                    if match:
+                        name = match.group(1).replace("-", " ").replace("_", " ").title()
+
+                # Clean name if it contains "LinkedIn" or generic strings
+                if name:
+                    name = re.sub(r'\b(?:linkedin|profile|perfil|on linkedin)\b.*$', '', name, flags=re.IGNORECASE).strip()
+
+                if name and company_name.lower() not in name.lower():
+                    found_people.append({
+                        "name": name,
+                        "role": role,
+                        "linkedin_url": clean_link
+                    })
+
+    # Fallback to scraping team info directly from website text if few people found
+    if len(found_people) < 3 and scraped_text:
+        # Look for typical executive/founder patterns
+        patterns = [
+            r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\s*,\s*(?:CEO|CTO|Founder|Co-Founder|CFO|Director|CEO y Fundador|Fundador)\b',
+            r'(?:CEO|CTO|Founder|Co-Founder|CFO|Director|Fundador|Fundadora)\s+(?:de|and CEO of)?\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})'
+        ]
+        for pattern in patterns:
+            for match in re.finditer(pattern, scraped_text):
+                name = match.group(1).strip()
+                # Exclude common noise words
+                if not any(w in name.lower() for w in ["the", "this", "our", "we", "company", "startup", "venture", "team", "about", "pricing", "product"]):
+                    # Deduplicate by name
+                    if not any(p["name"].lower() == name.lower() for p in found_people):
+                        matched_str = match.group(0).lower()
+                        role = "Executive / Team Member"
+                        if "ceo" in matched_str:
+                            role = "CEO & Founder"
+                        elif "cto" in matched_str:
+                            role = "CTO"
+                        elif "founder" in matched_str or "fundador" in matched_str:
+                            role = "Founder"
+
+                        found_people.append({
+                            "name": name,
+                            "role": role,
+                            "linkedin_url": None
+                        })
+
+    return found_people
