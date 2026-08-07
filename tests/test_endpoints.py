@@ -112,6 +112,24 @@ class TestAppEndpoints(unittest.TestCase):
         self.db.delete(report)
         self.db.commit()
 
+    def test_register_password_length(self):
+        resp = self.client.post("/register", json={
+            "email": "shortpass@example.com",
+            "password": "short",
+            "account_type": "personal"
+        })
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("La contraseña debe tener al menos 8 caracteres", resp.json()["detail"])
+
+        import uuid
+        unique_email = f"longpass_{uuid.uuid4().hex}@example.com"
+        resp_ok = self.client.post("/register", json={
+            "email": unique_email,
+            "password": "longenoughpassword",
+            "account_type": "personal"
+        })
+        self.assertEqual(resp_ok.status_code, 200)
+
 if __name__ == "__main__":
     import unittest
     unittest.main()

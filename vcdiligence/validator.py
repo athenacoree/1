@@ -7,10 +7,11 @@ from sqlalchemy import func
 import datetime
 from vcdiligence.database import AuditLog
 
-def validate_url_for_ssrf(url: str) -> str:
+def validate_url_for_ssrf(url: str) -> tuple[str, str]:
     """
     Validates that a URL is a valid http/https URL and resolves to a public, non-private IP address.
     Raises HTTPException if invalid.
+    Returns a tuple of (validated_url, ip_address).
     """
     if not url.startswith("http://") and not url.startswith("https://"):
         url = "https://" + url
@@ -39,6 +40,7 @@ def validate_url_for_ssrf(url: str) -> str:
             detail=f"Could not resolve hostname: {hostname}"
         )
 
+    validated_ip = None
     for item in ips:
         ip_str = item[4][0]
         try:
@@ -51,16 +53,14 @@ def validate_url_for_ssrf(url: str) -> str:
                 ip_obj.is_reserved or
                 ip_obj.is_unspecified or
                 ip_str == "0.0.0.0" or
-                ip_str == "::" or
-                ip_str.startswith("127.") or
-                ip_str.startswith("10.") or
-                ip_str.startswith("192.168.") or
-                ip_str.startswith("172.1") or ip_str.startswith("172.2") or ip_str.startswith("172.3")
+                ip_str == "::"
             ):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Access to private or local IP address is prohibited: {ip_str}"
                 )
+            if not validated_ip:
+                validated_ip = ip_str
         except ValueError:
             # If for some reason it's not a valid IP string format
             raise HTTPException(
@@ -68,7 +68,10 @@ def validate_url_for_ssrf(url: str) -> str:
                 detail=f"Resolved host has invalid IP: {ip_str}"
             )
 
-    return url
+    if not validated_ip and ips:
+        validated_ip = ips[0][4][0]
+
+    return url, validated_ip
 
 def check_rate_limit(organization_id: int, db: Session, limit: int = 5, window_minutes: int = 60):
     """

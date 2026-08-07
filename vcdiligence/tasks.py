@@ -1,6 +1,6 @@
 import os
 import json
-from vcdiligence.database import SessionLocal, Organization, Report, Task
+from vcdiligence.database import SessionLocal, Organization, Report, Task, UserWallet
 from vcdiligence.logging_config import logger
 from vcdiligence.scraper import SmartScraper
 from vcdiligence.parser import parse_report_meta, merge_devils_advocate
@@ -96,7 +96,9 @@ def run_due_diligence_task(
     user_priorities: list = None,
     custom_focus_keywords: str = None,
     language: str = "es",
-    force_refresh: bool = False
+    force_refresh: bool = False,
+    credit_charged: bool = False,
+    validated_ip: str = None
 ):
     """
     Runs the multi-agent crew as a background task, updating DB Task rows.
@@ -112,7 +114,7 @@ def run_due_diligence_task(
             db.commit()
 
         # Scrape company landing and internal pages first (needed for heuristics)
-        payload = SmartScraper.analyze_startup(url)
+        payload = SmartScraper.analyze_startup(url, validated_ip=validated_ip)
 
         # Build list of scanned pages and update progress message in real-time
         internal_keys = [k for k in payload.get("internal_pages", {}).keys() if "-missing-page" not in k]
@@ -406,7 +408,10 @@ def run_due_diligence_task(
         email_to = notify_email or user_email
         token = create_access_token(data={"sub": user_email})
         port = os.getenv("PORT", "10000")
-        base_url = f"http://localhost:{port}"
+        app_base_url = os.getenv("APP_BASE_URL")
+        if not app_base_url:
+            logger.warning("APP_BASE_URL environment variable is not set. Falling back to localhost.")
+        base_url = (app_base_url or f"http://localhost:{port}").rstrip('/')
         pdf_url = f"{base_url}/reports/{domain}/pdf?token={token}"
 
         if email_to:
@@ -452,5 +457,14 @@ def run_due_diligence_task(
             task.progress = 0
             task.message = f"Analysis failed: {str(e)}"
             db.commit()
+        if credit_charged:
+            try:
+                wallet = db.query(UserWallet).filter_by(user_id=user_id).with_for_update().first()
+                if wallet:
+                    wallet.credits_balance += 1
+                    db.commit()
+                    logger.info(f"Refunded 1 credit to user {user_id} due to analysis failure. New balance: {wallet.credits_balance}")
+            except Exception as refund_err:
+                logger.error(f"Failed to refund credit to user {user_id}: {str(refund_err)}")
     finally:
         db.close()

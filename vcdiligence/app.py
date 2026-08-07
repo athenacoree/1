@@ -33,9 +33,12 @@ from vcdiligence.tasks import run_due_diligence_task
 app = FastAPI(title="DealScout AI — Enterprise Due Diligence")
 
 # Enable CORS for easier client integration
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:10000")
+allowed_origins = [orig.strip() for orig in allowed_origins_env.split(",") if orig.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -154,6 +157,9 @@ class CreateListingRequest(BaseModel):
 
 @app.post("/register")
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
+    if len(req.password) < 8:
+        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 8 caracteres")
+
     # Check if user already exists
     existing = db.query(User).filter_by(email=req.email).first()
     if existing:
@@ -768,7 +774,7 @@ def start_analysis(
         extra_ctx["linkedin_data"] = linkedin_info.get("linkedin_data")
 
     # Block SSRF & validate URL
-    validated_url = validate_url_for_ssrf(url)
+    validated_url, validated_ip = validate_url_for_ssrf(url)
     domain = SmartScraper.get_domain(validated_url)
 
     # Multi-tenant isolation: check if organization has completed report
@@ -805,9 +811,14 @@ def start_analysis(
             db.commit()
         return {"status": "completed", "task_id": task_id}
 
+    # Check Rate Limit (e.g., maximum 10 analyses per hour per organization)
+    check_rate_limit(organization_id=current_user.organization_id, db=db, limit=10, window_minutes=60)
+
+    credit_charged = False
+
     # Credit/Subscription validation if payments system is enabled
     if is_payments_enabled(db):
-        wallet = db.query(UserWallet).filter_by(user_id=current_user.id).first()
+        wallet = db.query(UserWallet).filter_by(user_id=current_user.id).with_for_update().first()
         now = datetime.datetime.utcnow()
         has_sub = wallet and wallet.subscription_active and wallet.subscription_expires_at and wallet.subscription_expires_at > now
         has_credit = wallet and wallet.credits_balance >= 1
@@ -821,11 +832,9 @@ def start_analysis(
         if not has_sub:
             # Deduct 1 credit
             wallet.credits_balance -= 1
+            credit_charged = True
             db.commit()
             logger.info(f"Deducted 1 credit from user {current_user.id} for analysis of {domain}. New balance: {wallet.credits_balance}")
-
-    # Check Rate Limit (e.g., maximum 10 analyses per hour per organization)
-    check_rate_limit(organization_id=current_user.organization_id, db=db, limit=10, window_minutes=60)
 
     # Check if task is already running for this organization
     task_id = f"{current_user.organization_id}_{domain}"
@@ -899,7 +908,9 @@ def start_analysis(
         user_priorities=current_user.analysis_priorities,
         custom_focus_keywords=current_user.custom_focus_keywords,
         language=lang,
-        force_refresh=req.force_refresh
+        force_refresh=req.force_refresh,
+        credit_charged=credit_charged,
+        validated_ip=validated_ip
     )
 
     return {"status": "running", "task_id": task_id}
@@ -1034,18 +1045,19 @@ def upload_and_analyze(
 
     # Find website URL if not explicitly provided
     validated_url = None
+    validated_ip = None
     if url:
-        validated_url = validate_url_for_ssrf(url.strip())
+        validated_url, validated_ip = validate_url_for_ssrf(url.strip())
     else:
         inferred_url = SmartScraper.extract_url_from_text(text)
         if inferred_url:
-            validated_url = validate_url_for_ssrf(inferred_url)
+            validated_url, validated_ip = validate_url_for_ssrf(inferred_url)
         else:
             # Try to infer from filename as last resort fallback
             name_fallback = os.path.splitext(pitch_deck.filename)[0].lower()
             name_fallback = re.sub(r'[^a-z0-9]', '', name_fallback).replace("pitchdeck", "").replace("deck", "").replace("pitch", "")
             if name_fallback and len(name_fallback) > 1:
-                validated_url = validate_url_for_ssrf(f"https://{name_fallback}.com")
+                validated_url, validated_ip = validate_url_for_ssrf(f"https://{name_fallback}.com")
             else:
                 raise HTTPException(
                     status_code=400,
@@ -1162,7 +1174,8 @@ def upload_and_analyze(
         user_enabled_sources=current_user.enabled_sources,
         user_priorities=current_user.analysis_priorities,
         custom_focus_keywords=current_user.custom_focus_keywords,
-        language=lang
+        language=lang,
+        validated_ip=validated_ip
     )
 
     return {"status": "running", "task_id": task_id}
@@ -2172,7 +2185,7 @@ def complete_transaction_and_apply_benefits(db: Session, transaction: PaymentTra
     transaction.completed_at = datetime.datetime.utcnow()
 
     # Find or create UserWallet
-    wallet = db.query(UserWallet).filter_by(user_id=transaction.user_id).first()
+    wallet = db.query(UserWallet).filter_by(user_id=transaction.user_id).with_for_update().first()
     if not wallet:
         wallet = UserWallet(user_id=transaction.user_id, credits_balance=0, subscription_active=False)
         db.add(wallet)
@@ -2313,8 +2326,11 @@ def create_checkout_session(plan_id: int, req: CheckoutRequest, current_user: Us
     db.refresh(transaction)
 
     port = os.getenv("PORT", "10000")
+    app_base_url = os.getenv("APP_BASE_URL")
+    if not app_base_url:
+        logger.warning("APP_BASE_URL environment variable is not set. Falling back to localhost.")
     # For local/testing we dynamically fallback to window.location host or default local base URL
-    base_url = os.getenv("APP_BASE_URL", f"http://localhost:{port}").rstrip('/')
+    base_url = (app_base_url or f"http://localhost:{port}").rstrip('/')
 
     # Check if we should use Mock mode (highly recommended for local testing/CI)
     stripe_key = os.getenv("STRIPE_SECRET_KEY")

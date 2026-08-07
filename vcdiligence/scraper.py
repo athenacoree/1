@@ -2,10 +2,50 @@ import os
 import re
 import json
 import requests
+import threading
+import contextlib
+import urllib3.util.connection as conn
 from urllib.parse import urlparse, urljoin
 from bs4 import BeautifulSoup
 from duckduckgo_search import DDGS
 from vcdiligence.logging_config import logger
+
+_thread_local = threading.local()
+playwright_semaphore = threading.Semaphore(2)
+
+def _get_pinned_ips():
+    if not hasattr(_thread_local, "pinned_ips"):
+        _thread_local.pinned_ips = {}
+    return _thread_local.pinned_ips
+
+orig_create_connection = conn.create_connection
+
+def custom_create_connection(address, *args, **kwargs):
+    host, port = address
+    pinned_ips = _get_pinned_ips()
+    host_lower = host.lower() if host else ""
+    if host_lower in pinned_ips:
+        return orig_create_connection((pinned_ips[host_lower], port), *args, **kwargs)
+    if host_lower.startswith("www."):
+        parent_host = host_lower[4:]
+        if parent_host in pinned_ips:
+            return orig_create_connection((pinned_ips[parent_host], port), *args, **kwargs)
+    return orig_create_connection(address, *args, **kwargs)
+
+conn.create_connection = custom_create_connection
+
+@contextlib.contextmanager
+def pinned_dns(domain, ip):
+    if not ip:
+        yield
+        return
+    pinned_ips = _get_pinned_ips()
+    domain_lower = domain.lower()
+    pinned_ips[domain_lower] = ip
+    try:
+        yield
+    finally:
+        pinned_ips.pop(domain_lower, None)
 
 class SmartScraper:
     @staticmethod
@@ -22,46 +62,53 @@ class SmartScraper:
         return text.strip()
 
     @classmethod
-    def scrape_with_requests(cls, url):
-        try:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1"
-            }
-            response = requests.get(url, headers=headers, timeout=12)
-            if response.status_code != 200:
-                logger.warning(f"Requests scrape failed with HTTP {response.status_code} for {url}")
-                return None
+    def scrape_with_requests(cls, url, validated_ip=None):
+        domain = cls.get_domain(url)
+        with pinned_dns(domain, validated_ip):
+            try:
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1"
+                }
+                response = requests.get(url, headers=headers, timeout=12)
+                if response.status_code != 200:
+                    logger.warning(f"Requests scrape failed with HTTP {response.status_code} for {url}")
+                    return None
 
-            soup = BeautifulSoup(response.text, "html.parser")
-            for script_or_style in soup(["script", "style", "nav", "footer"]):
-                script_or_style.decompose()
+                soup = BeautifulSoup(response.text, "html.parser")
+                for script_or_style in soup(["script", "style", "nav", "footer"]):
+                    script_or_style.decompose()
 
-            cleaned = cls.clean_text(soup.get_text())
-            if len(cleaned) < 300:
-                logger.warning(f"Requests scrape returned very short content ({len(cleaned)} chars) for {url}")
+                cleaned = cls.clean_text(soup.get_text())
+                if len(cleaned) < 300:
+                    logger.warning(f"Requests scrape returned very short content ({len(cleaned)} chars) for {url}")
+                    return None
+                return cleaned
+            except Exception as e:
+                logger.error(f"Error scraping with requests on {url}: {str(e)}")
                 return None
-            return cleaned
-        except Exception as e:
-            logger.error(f"Error scraping with requests on {url}: {str(e)}")
-            return None
 
     @classmethod
-    def scrape_with_playwright(cls, url):
+    def scrape_with_playwright(cls, url, validated_ip=None):
         logger.info(f"Using Playwright headless fallback for {url}")
         try:
             from playwright.sync_api import sync_playwright
             with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
-                # Create a context with custom User-Agent
-                context = browser.new_context(
-                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                )
-                page = context.new_page()
-                page.goto(url, timeout=20000, wait_until="load")
-                # Wait 1s for any dynamically-rendered text
-                page.wait_for_timeout(1000)
-                content = page.content()
-                browser.close()
+                domain = cls.get_domain(url)
+                args = []
+                if validated_ip:
+                    args.append(f"--host-resolver-rules=MAP {domain} {validated_ip}, MAP www.{domain} {validated_ip}")
+                with playwright_semaphore:
+                    browser = p.chromium.launch(headless=True, args=args)
+                    # Create a context with custom User-Agent
+                    context = browser.new_context(
+                        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    )
+                    page = context.new_page()
+                    page.goto(url, timeout=20000, wait_until="load")
+                    # Wait 1s for any dynamically-rendered text
+                    page.wait_for_timeout(1000)
+                    content = page.content()
+                    browser.close()
 
                 soup = BeautifulSoup(content, "html.parser")
                 for script_or_style in soup(["script", "style", "nav", "footer"]):
@@ -76,55 +123,61 @@ class SmartScraper:
             return f"[Could not verify content for {url} due to connection error or security block]"
 
     @classmethod
-    def scrape_url(cls, url):
+    def scrape_url(cls, url, validated_ip=None):
         # First try requests
-        text = cls.scrape_with_requests(url)
+        text = cls.scrape_with_requests(url, validated_ip=validated_ip)
         if text:
             return text
         # If requests fails or returns very short text, try Playwright
-        return cls.scrape_with_playwright(url)
+        return cls.scrape_with_playwright(url, validated_ip=validated_ip)
 
     @classmethod
-    def get_internal_links(cls, base_url):
+    def get_internal_links(cls, base_url, validated_ip=None):
         links = set()
-        try:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1"
-            }
-            # Attempt to fetch links using requests, fallback to Playwright if needed
-            response = requests.get(base_url, headers=headers, timeout=10)
-            html = response.text if response.status_code == 200 else ""
-            if not html or len(html) < 2000:
-                logger.info(f"Using Playwright headless fallback to find internal links for {base_url}")
-                try:
-                    from playwright.sync_api import sync_playwright
-                    with sync_playwright() as p:
-                        browser = p.chromium.launch(headless=True)
-                        page = browser.new_page()
-                        page.goto(base_url, timeout=15000, wait_until="load")
-                        html = page.content()
-                        browser.close()
-                except Exception:
-                    pass
+        domain = cls.get_domain(base_url)
+        with pinned_dns(domain, validated_ip):
+            try:
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1"
+                }
+                # Attempt to fetch links using requests, fallback to Playwright if needed
+                response = requests.get(base_url, headers=headers, timeout=10)
+                html = response.text if response.status_code == 200 else ""
+                if not html or len(html) < 2000:
+                    logger.info(f"Using Playwright headless fallback to find internal links for {base_url}")
+                    try:
+                        from playwright.sync_api import sync_playwright
+                        with sync_playwright() as p:
+                            args = []
+                            if validated_ip:
+                                args.append(f"--host-resolver-rules=MAP {domain} {validated_ip}, MAP www.{domain} {validated_ip}")
+                            with playwright_semaphore:
+                                browser = p.chromium.launch(headless=True, args=args)
+                                page = browser.new_page()
+                                page.goto(base_url, timeout=15000, wait_until="load")
+                                html = page.content()
+                                browser.close()
+                    except Exception:
+                        pass
 
-            if html:
-                soup = BeautifulSoup(html, "html.parser")
-                domain = cls.get_domain(base_url)
-                for anchor in soup.find_all("a", href=True):
-                    href = anchor["href"]
-                    full_url = urljoin(base_url, href)
-                    parsed_full = urlparse(full_url)
-                    full_domain = parsed_full.netloc
-                    if full_domain.startswith("www."):
-                        full_domain = full_domain[4:]
+                if html:
+                    soup = BeautifulSoup(html, "html.parser")
+                    domain = cls.get_domain(base_url)
+                    for anchor in soup.find_all("a", href=True):
+                        href = anchor["href"]
+                        full_url = urljoin(base_url, href)
+                        parsed_full = urlparse(full_url)
+                        full_domain = parsed_full.netloc
+                        if full_domain.startswith("www."):
+                            full_domain = full_domain[4:]
 
-                    if full_domain == domain:
-                        path_lower = parsed_full.path.lower()
-                        if any(kw in path_lower for kw in ["about", "team", "pricing", "product", "features", "career", "contact"]):
-                            links.add(full_url)
-        except Exception as e:
-            logger.error(f"Error getting internal links for {base_url}: {str(e)}")
-        return list(links)[:4]
+                        if full_domain == domain:
+                            path_lower = parsed_full.path.lower()
+                            if any(kw in path_lower for kw in ["about", "team", "pricing", "product", "features", "career", "contact"]):
+                                links.add(full_url)
+            except Exception as e:
+                logger.error(f"Error getting internal links for {base_url}: {str(e)}")
+            return list(links)[:4]
 
     @classmethod
     def search_duckduckgo(cls, query, count=3):
@@ -146,7 +199,15 @@ class SmartScraper:
         return results
 
     @classmethod
-    def analyze_startup(cls, url):
+    def analyze_startup(cls, url, validated_ip=None):
+        if not validated_ip:
+            from vcdiligence.validator import validate_url_for_ssrf
+            try:
+                url, validated_ip = validate_url_for_ssrf(url)
+            except Exception as e:
+                logger.error(f"SSRF validation failed for {url} inside analyze_startup: {str(e)}")
+                raise
+
         domain = cls.get_domain(url)
         cache_dir = os.path.join(os.path.dirname(__file__), "cache")
         os.makedirs(cache_dir, exist_ok=True)
@@ -161,14 +222,14 @@ class SmartScraper:
                 pass
 
         logger.info(f"Starting analysis for startup: {url}")
-        homepage_content = cls.scrape_url(url)
+        homepage_content = cls.scrape_url(url, validated_ip=validated_ip)
         company_name = domain.split('.')[0].capitalize()
 
         internal_content = {}
-        internal_links = cls.get_internal_links(url)
+        internal_links = cls.get_internal_links(url, validated_ip=validated_ip)
         for link in internal_links:
             link_path = urlparse(link).path
-            internal_content[link_path] = cls.scrape_url(link)[:1500]
+            internal_content[link_path] = cls.scrape_url(link, validated_ip=validated_ip)[:1500]
 
         # Explicitly record missing sub-pages so Omission Analyst is aware
         expected_keywords = ["pricing", "team", "about", "features"]
