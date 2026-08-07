@@ -95,7 +95,8 @@ def run_due_diligence_task(
     user_enabled_sources: list = None,
     user_priorities: list = None,
     custom_focus_keywords: str = None,
-    language: str = "es"
+    language: str = "es",
+    force_refresh: bool = False
 ):
     """
     Runs the multi-agent crew as a background task, updating DB Task rows.
@@ -140,7 +141,7 @@ def run_due_diligence_task(
             domain=domain,
             scraped_text=scraped_text,
             user_enabled_sources=user_enabled_sources,
-            force_refresh=False
+            force_refresh=force_refresh
         )
         public_insights_text = json.dumps(public_insights, indent=2)
 
@@ -389,7 +390,8 @@ def run_due_diligence_task(
             "report_md": markdown_report,
             "llm_provider": provider_name,
             "pdf_path": f"/reports/{domain}/pdf",
-            "screenshot_gallery": screenshot_gallery
+            "screenshot_gallery": screenshot_gallery,
+            "created_at": datetime.datetime.utcnow().isoformat()
         }
 
         task = db.query(Task).filter_by(id=f"{org_id}_{domain}").first()

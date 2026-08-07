@@ -273,6 +273,7 @@
 
     isLoading: false,
     taskId: '',
+    viewingTaskId: '',
     statusMessage: '',
     progressPercent: 0,
     showResult: false,
@@ -333,6 +334,16 @@
         if (this.token) {
             await this.loadUserProfile();
             await this.loadReports();
+
+            // Auto-resume polling if an analysis was in progress
+            const savedTaskId = localStorage.getItem('dealscout_active_task_id');
+            if (savedTaskId) {
+                this.taskId = savedTaskId;
+                this.isLoading = true;
+                this.statusMessage = 'Reanudando monitoreo de análisis activo...';
+                this.progressPercent = 10;
+                this.startPolling();
+            }
         }
     },
 
@@ -902,7 +913,7 @@
         }
     },
 
-    async triggerAnalysis(urlToScan) {
+    async triggerAnalysis(urlToScan, forceRefresh = false) {
         this.errorMessage = '';
         this.isLoading = true;
         this.showResult = false;
@@ -920,7 +931,8 @@
             const payload = {
                 url: this.startupUrl,
                 notify_email: this.notifyEmail || null,
-                language: this.selectedLanguage
+                language: this.selectedLanguage,
+                force_refresh: forceRefresh
             };
             if (this.receiveWhatsapp && this.user && this.user.verified_by_admin) {
                 payload.receive_whatsapp = true;
@@ -1061,13 +1073,18 @@
 
     startPolling() {
         this.partialSections = {};
+        if (this.taskId) {
+            localStorage.setItem('dealscout_active_task_id', this.taskId);
+        }
         if (this.pollInterval) clearInterval(this.pollInterval);
+        let consecutiveFailures = 0;
         this.pollInterval = setInterval(async () => {
             try {
                 const res = await fetch(`/status/${this.taskId}`, {
                     headers: { 'Authorization': 'Bearer ' + this.token }
                 });
                 const data = await res.json();
+                consecutiveFailures = 0; // Reset counter on success
 
                 this.statusMessage = data.message;
                 this.progressPercent = data.progress;
@@ -1075,6 +1092,8 @@
 
                 if (data.status === 'completed') {
                     clearInterval(this.pollInterval);
+                    this.pollInterval = null;
+                    localStorage.removeItem('dealscout_active_task_id');
                     this.resultData = data.result;
                     this.llmUsed = data.result.llm_provider || 'OpenRouter';
                     this.isLoading = false;
@@ -1084,20 +1103,29 @@
                     await this.loadPublicStats();
                 } else if (data.status === 'failed') {
                     clearInterval(this.pollInterval);
+                    this.pollInterval = null;
+                    localStorage.removeItem('dealscout_active_task_id');
                     this.errorMessage = data.message;
                     this.isLoading = false;
                 }
             } catch (err) {
-                clearInterval(this.pollInterval);
-                this.errorMessage = 'Connection interrupted. Please try again.';
-                this.isLoading = false;
+                consecutiveFailures++;
+                console.warn(`Error de conexión en polling (intento ${consecutiveFailures}/3):`, err);
+                if (consecutiveFailures >= 3) {
+                    clearInterval(this.pollInterval);
+                    this.pollInterval = null;
+                    localStorage.removeItem('dealscout_active_task_id');
+                    this.errorMessage = 'Connection interrupted after multiple attempts. Please try again.';
+                    this.isLoading = false;
+                }
             }
         }, 3000);
     },
 
-    async fetchCompletedResult() {
+    async fetchCompletedResult(targetTaskId) {
+        const idToFetch = targetTaskId || this.taskId;
         try {
-            const res = await fetch(`/status/${this.taskId}`, {
+            const res = await fetch(`/status/${idToFetch}`, {
                 headers: { 'Authorization': 'Bearer ' + this.token }
             });
             const data = await res.json();
@@ -1114,11 +1142,20 @@
     },
 
     async selectReport(rep) {
+        // If an active analysis is running, warn the user first.
+        if (this.pollInterval) {
+            if (!confirm('Advertencia: Tienes un análisis en curso. Ver el historial detendrá el monitoreo en tiempo real de la tarea activa. ¿Deseas continuar?')) {
+                return;
+            }
+            clearInterval(this.pollInterval);
+            this.pollInterval = null;
+            localStorage.removeItem('dealscout_active_task_id');
+        }
         this.errorMessage = '';
         this.isLoading = true;
         this.showResult = false;
-        this.taskId = `${this.user.organization.id}_${rep.domain}`;
-        await this.fetchCompletedResult();
+        this.viewingTaskId = `${this.user.organization.id}_${rep.domain}`;
+        await this.fetchCompletedResult(this.viewingTaskId);
     },
 
     parseOmissionSection(reportMd) {
@@ -1891,12 +1928,22 @@
                                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                                     <div>
                                         <h2 class="text-3xl font-black tracking-tight text-white mb-1" x-text="resultData ? resultData.company_name : ''"></h2>
-                                        <a :href="resultData ? resultData.company_url : '#'" target="_blank" class="text-xs text-cyan-400 hover:underline flex items-center gap-1.5">
-                                            <span x-text="resultData ? resultData.company_url : ''"></span>
-                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"></path>
-                                            </svg>
-                                        </a>
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <a :href="resultData ? resultData.company_url : '#'" target="_blank" class="text-xs text-cyan-400 hover:underline flex items-center gap-1.5">
+                                                <span x-text="resultData ? resultData.company_url : ''"></span>
+                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"></path>
+                                                </svg>
+                                            </a>
+                                            <template x-if="resultData && resultData.created_at">
+                                                <div class="flex items-center gap-2 text-[10px] text-slate-400 ml-2 border-l border-slate-800 pl-2">
+                                                    <span x-text="'Última actualización: ' + resultData.created_at.split('T')[0]"></span>
+                                                    <button @click="triggerAnalysis(resultData.company_url || resultData.domain, true)" class="px-2 py-0.5 bg-red-500/15 hover:bg-red-500/25 text-red-400 rounded-md text-[9px] font-bold border border-red-500/20">
+                                                        Analizar de nuevo
+                                                    </button>
+                                                </div>
+                                            </template>
+                                        </div>
                                     </div>
                                     <div class="flex gap-2">
                                         <button x-show="notionConfigured" @click="sendToNotion(resultData)" class="px-4 py-2 bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-400 rounded-xl text-xs font-bold border border-indigo-500/20 flex items-center space-x-1.5" style="display: none;">
