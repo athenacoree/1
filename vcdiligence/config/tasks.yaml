@@ -69,6 +69,10 @@ omission_analyst_task:
     Examine the homepage summary: {homepage_summary} and internal page text: {internal_pages_text}.
     Compare these against standard expectations for the startup's industry/stage (e.g. SaaS B2B, fintech, marketplace), identifying missing critical elements like concrete pricing structure, founder bios, business metrics (CAC, LTV, churn), social proof, or licensing/compliance.
 
+    You must also inspect and incorporate the following public registry records and regulatory insights from official sources (including OpenCorporates, SEC EDGAR, GDELT, CourtListener, WHOIS, USPTO, and OFAC sanctions list):
+    {public_api_insights}
+    Use this information to highlight active litigation, registered trademarks, legal issues, or regulatory and compliance omissions.
+
     Calculate and analyze the density of vague language/superlatives (e.g. "revolutionary", "game-changing", "market leader", "world-class") compared to the density of concrete figures and metrics.
 
     Todo tu output (incluyendo key_points, red_flags, y el memo final en prosa) debe estar ÍNTEGRAMENTE en {output_language}. No mezcles idiomas bajo ninguna circunstancia, incluso si las fuentes originales están en otro idioma — traduce la información al idioma solicitado.

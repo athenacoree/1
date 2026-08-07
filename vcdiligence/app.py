@@ -116,6 +116,7 @@ class AnalyzeRequest(BaseModel):
     receive_whatsapp: Optional[bool] = False
     whatsapp_number: Optional[str] = None
     language: Optional[str] = "es"
+    force_refresh: Optional[bool] = False
 
 class SearchCompanyRequest(BaseModel):
     company_name: str
@@ -170,6 +171,14 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     if req.account_type == "empresa" and req.company_name:
         # Create a new organization for white-labeling
         new_org = Organization(company_name=req.company_name)
+        db.add(new_org)
+        db.commit()
+        db.refresh(new_org)
+        org_id = new_org.id
+    elif req.account_type == "personal":
+        # Create a unique organization for personal accounts to isolate reports and search history
+        org_name = req.company_name or f"Personal Organization - {req.email}"
+        new_org = Organization(company_name=org_name)
         db.add(new_org)
         db.commit()
         db.refresh(new_org)
@@ -764,7 +773,7 @@ def start_analysis(
 
     # Multi-tenant isolation: check if organization has completed report
     existing_report = db.query(Report).filter_by(domain=domain, organization_id=current_user.organization_id).first()
-    if existing_report:
+    if existing_report and not req.force_refresh:
         # Return completed status immediately using cached database report!
         cached_result = {
             "company_name": existing_report.company_name,
@@ -776,7 +785,8 @@ def start_analysis(
             "report_md": existing_report.report_md,
             "llm_provider": existing_report.llm_provider,
             "pdf_path": f"/reports/{domain}/pdf",
-            "screenshot_gallery": existing_report.screenshot_gallery
+            "screenshot_gallery": existing_report.screenshot_gallery,
+            "created_at": existing_report.created_at.isoformat() if existing_report.created_at else None
         }
         # Also ensure a Task exists with completed status
         task_id = f"{current_user.organization_id}_{domain}"
@@ -888,7 +898,8 @@ def start_analysis(
         user_enabled_sources=current_user.enabled_sources,
         user_priorities=current_user.analysis_priorities,
         custom_focus_keywords=current_user.custom_focus_keywords,
-        language=lang
+        language=lang,
+        force_refresh=req.force_refresh
     )
 
     return {"status": "running", "task_id": task_id}
@@ -2425,8 +2436,16 @@ def create_checkout_session(plan_id: int, req: CheckoutRequest, current_user: Us
     raise HTTPException(status_code=400, detail="Unsupported provider selected.")
 
 @app.post("/checkout/test-complete/{transaction_id}")
-def test_complete_checkout(transaction_id: int, db: Session = Depends(get_db)):
+def test_complete_checkout(transaction_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """Simulates a successful checkout completion for testing/demonstration purposes."""
+    # Strict priority 1 security check: Only allow in development or test environment, and require administrator role.
+    env = os.getenv("ENVIRONMENT", "production")
+    if env not in ["development", "test"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Operation restricted. The test complete endpoint is disabled in production environments."
+        )
+
     transaction = db.query(PaymentTransaction).filter_by(id=transaction_id).first()
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found.")
@@ -2444,12 +2463,13 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     sig_header = request.headers.get("stripe-signature")
     webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
 
+    if not webhook_secret:
+        logger.error("Stripe Webhook failed: STRIPE_WEBHOOK_SECRET is not configured.")
+        raise HTTPException(status_code=500, detail="Stripe Webhook Secret is not configured.")
+
     import stripe
     try:
-        if webhook_secret:
-            event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
-        else:
-            event = json.loads(payload)
+        event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
     except Exception as e:
         logger.error(f"Stripe Webhook parsing/signature verification failed: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Webhook Error: {str(e)}")
@@ -2474,7 +2494,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
 
 @app.post("/webhooks/crypto")
 async def crypto_webhook(request: Request, db: Session = Depends(get_db)):
-    """Crypto Webhook for Coinbase Commerce or NOWPayments IPN callbacks."""
+    """Crypto Webhook for Coinbase Commerce or NOWPayments IPN callbacks with signature verification."""
     payload = await request.body()
     # Log the payload for traceability
     logger.info(f"Received Crypto Webhook: {payload.decode('utf-8')}")
@@ -2485,13 +2505,37 @@ async def crypto_webhook(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Invalid JSON payload.")
 
     crypto_provider = os.getenv("CRYPTO_PROVIDER", "coinbase_commerce").lower().strip()
+    webhook_secret = os.getenv("CRYPTO_WEBHOOK_SECRET")
+    env = os.getenv("ENVIRONMENT", "production")
 
-    # Coinbase Commerce signatures are in header 'X-CC-Webhook-Signature'
-    # NOWPayments signatures are in header 'x-nowpayments-sig'
-    # Note: For verification, Coinbase Commerce signs the raw body with a secret.
-    # To keep the system robust but easily testable, we parse the payloads directly and apply benefits if confirmed.
+    # Flag to check if we can bypass signature verification in non-production environments with mock keys
+    allow_mock_bypass = env in ["development", "test"] and webhook_secret and webhook_secret.startswith("mock")
+
+    import hmac
+    import hashlib
 
     if crypto_provider == "nowpayments":
+        sig_header = request.headers.get("x-nowpayments-sig")
+        if not allow_mock_bypass:
+            if not webhook_secret:
+                logger.error("NOWPayments signature verification failed: CRYPTO_WEBHOOK_SECRET is not configured.")
+                raise HTTPException(status_code=400, detail="Signature secret not configured.")
+            if not sig_header:
+                logger.error("NOWPayments signature verification failed: x-nowpayments-sig header is missing.")
+                raise HTTPException(status_code=400, detail="Signature header missing.")
+
+            # Verify signature: HMAC-SHA512 of sorted-keys, compact JSON representation
+            sorted_msg = json.dumps(data, separators=(',', ':'), sort_keys=True)
+            digest = hmac.new(
+                webhook_secret.encode('utf-8'),
+                sorted_msg.encode('utf-8'),
+                hashlib.sha512
+            )
+            computed_signature = digest.hexdigest()
+            if not hmac.compare_digest(computed_signature, sig_header):
+                logger.error("NOWPayments cryptographic signature mismatch.")
+                raise HTTPException(status_code=400, detail="Invalid signature.")
+
         # NOWPayments IPN properties: "payment_status" -> "finished", "order_id" -> transaction_id
         status_str = data.get("payment_status")
         order_id_str = data.get("order_id")
@@ -2505,6 +2549,25 @@ async def crypto_webhook(request: Request, db: Session = Depends(get_db)):
             except Exception as ex:
                 logger.error(f"NOWPayments benefits application failure: {str(ex)}")
     else:
+        sig_header = request.headers.get("x-cc-webhook-signature")
+        if not allow_mock_bypass:
+            if not webhook_secret:
+                logger.error("Coinbase Commerce signature verification failed: CRYPTO_WEBHOOK_SECRET is not configured.")
+                raise HTTPException(status_code=400, detail="Signature secret not configured.")
+            if not sig_header:
+                logger.error("Coinbase Commerce signature verification failed: X-CC-Webhook-Signature header is missing.")
+                raise HTTPException(status_code=400, detail="Signature header missing.")
+
+            # Verify signature: HMAC-SHA256 of raw payload
+            computed_signature = hmac.new(
+                webhook_secret.encode('utf-8'),
+                payload,
+                hashlib.sha256
+            ).hexdigest()
+            if not hmac.compare_digest(computed_signature, sig_header):
+                logger.error("Coinbase Commerce cryptographic signature mismatch.")
+                raise HTTPException(status_code=400, detail="Invalid signature.")
+
         # Coinbase Commerce webhook event properties: "event" -> {"type": "charge:confirmed", "data": {"metadata": {"transaction_id": ...}}}
         evt = data.get("event", {})
         evt_type = evt.get("type")
