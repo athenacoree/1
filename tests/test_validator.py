@@ -25,8 +25,9 @@ class TestValidatorSSRF(unittest.TestCase):
         ]
         for url in allowed_urls:
             try:
-                res = validate_url_for_ssrf(url)
+                res, ip = validate_url_for_ssrf(url)
                 self.assertTrue(res.startswith("http"))
+                self.assertIsNotNone(ip)
             except HTTPException as e:
                 self.fail(f"Public URL {url} should have been allowed, failed with {e.detail}")
 
