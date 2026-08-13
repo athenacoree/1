@@ -33,6 +33,9 @@ class TestNewFeatures(unittest.TestCase):
             )
             self.db.add(self.analyst)
             self.db.commit()
+        else:
+            self.analyst.hashed_password = hash_password("analystpassword")
+            self.db.commit()
 
         # Admin User
         self.admin = self.db.query(User).filter_by(email="admin_test@dealscout.ai").first()
@@ -418,6 +421,35 @@ class TestNewFeatures(unittest.TestCase):
         resp_invalid = self.client.post("/admin/config", data={"key": "arbitrary_evil_key", "value": "hack"}, headers=admin_headers)
         self.assertEqual(resp_invalid.status_code, 400)
         self.assertIn("no es una de las conocidas en el CONFIG_REGISTRY", resp_invalid.json()["detail"])
+
+    def test_generate_hype_and_qa_logic(self):
+        """Verify the rule-based and structure of generate_hype_and_qa helper."""
+        from vcdiligence.parser import generate_hype_and_qa
+
+        scraped_text = (
+            "We are a pioneering and revolutionary company with a cutting-edge next-gen "
+            "AI-powered solution. Our disruptive world-class SaaS is a total game-changer "
+            "triggering a paradigm shift."
+        )
+        company_name = "HyperTech"
+
+        # Test generation (will use fallback/rule-based locally since no live API keys are provided in tests)
+        res = generate_hype_and_qa(scraped_text, company_name)
+
+        self.assertIn("hype_score", res)
+        self.assertTrue(res["hype_score"] > 20)
+        self.assertTrue(len(res["detected_cliches"]) > 0)
+
+        # Check specific detected cliché keys
+        words_detected = [c["word"] for c in res["detected_cliches"]]
+        self.assertIn("Next-Gen", words_detected)
+        self.assertIn("AI-Powered", words_detected)
+        self.assertIn("Disrupt", words_detected)
+
+        # Check simulated questions
+        self.assertTrue(len(res["simulated_questions"]) >= 3)
+        self.assertIn("question", res["simulated_questions"][0])
+        self.assertIn("answer", res["simulated_questions"][0])
 
 
 if __name__ == "__main__":

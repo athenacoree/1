@@ -32,6 +32,9 @@ class TestAppEndpoints(unittest.TestCase):
             )
             self.db.add(user)
             self.db.commit()
+        else:
+            user.hashed_password = hash_password("analystpassword")
+            self.db.commit()
 
     def tearDown(self):
         self.db.close()

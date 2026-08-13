@@ -3,7 +3,7 @@ import json
 from vcdiligence.database import SessionLocal, Organization, Report, Task, UserWallet
 from vcdiligence.logging_config import logger
 from vcdiligence.scraper import SmartScraper
-from vcdiligence.parser import parse_report_meta, merge_devils_advocate
+from vcdiligence.parser import parse_report_meta, merge_devils_advocate, generate_hype_and_qa
 from vcdiligence.public_apis import get_all_public_insights
 from vcdiligence.source_orchestrator import run_orchestrated_analysis, search_founders_and_team
 from vcdiligence.pdf_generator import generate_report_pdf
@@ -244,6 +244,9 @@ def run_due_diligence_task(
         # Apply Bloque B.2 adjusted weights calibration if decisions exist
         score, recommendation = get_adjusted_score_for_org(db, org_id, sub_scores, parsed_score, parsed_recommendation)
 
+        # Generate Hype Audit & IC Q&A Simulator dynamic payload
+        hype_qa_data = generate_hype_and_qa(scraped_text, company_name, db_session=db)
+
         # Extract specialist sources for screenshot candidates
         specialist_urls = []
         try:
@@ -368,6 +371,7 @@ def run_due_diligence_task(
                 pdf_path=pdf_path,
                 llm_provider=provider_name,
                 screenshot_gallery=screenshot_gallery,
+                hype_qa=hype_qa_data,
                 organization_id=org_id
             )
             db.add(report)
@@ -379,6 +383,7 @@ def run_due_diligence_task(
             report.pdf_path = pdf_path
             report.llm_provider = provider_name
             report.screenshot_gallery = screenshot_gallery
+            report.hype_qa = hype_qa_data
         db.commit()
 
         # Update Task to completed
@@ -393,6 +398,7 @@ def run_due_diligence_task(
             "llm_provider": provider_name,
             "pdf_path": f"/reports/{domain}/pdf",
             "screenshot_gallery": screenshot_gallery,
+            "hype_qa": hype_qa_data,
             "created_at": datetime.datetime.utcnow().isoformat()
         }
 
@@ -402,6 +408,7 @@ def run_due_diligence_task(
             task.progress = 100
             task.message = "Analysis successfully completed!"
             task.result_json = final_data
+            task.hype_qa = hype_qa_data
             db.commit()
 
         # Send SMTP notification

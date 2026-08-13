@@ -105,6 +105,7 @@ class Report(Base):
     pdf_path = Column(String, nullable=True)
     llm_provider = Column(String, nullable=True)
     screenshot_gallery = Column(JSON, nullable=True)
+    hype_qa = Column(JSON, nullable=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
@@ -169,6 +170,7 @@ class Task(Base):
     message = Column(String, nullable=True)
     result_json = Column(JSON, nullable=True)
     partial_sections = Column(JSON, default=dict, nullable=True)
+    hype_qa = Column(JSON, nullable=True)
     language = Column(String, default="es", nullable=False)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
@@ -325,6 +327,8 @@ def init_db():
         alembic_cfg = Config(ini_path)
         command.upgrade(alembic_cfg, "head")
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         # Fallback to create_all if alembic upgrade fails
         Base.metadata.create_all(bind=engine)
 
