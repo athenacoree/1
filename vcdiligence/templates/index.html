@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DealScout AI — Enterprise VC Due Diligence & Validación</title>
+    <title>VerdictIQ — Enterprise VC Due Diligence & Validación</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/alpinejs" defer></script>
     <link href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -165,13 +165,13 @@
     token: localStorage.getItem('token') || '',
     user: null,
     branding: {
-        platform_name: 'DealScout AI',
+        platform_name: 'VerdictIQ',
         theme_color: 'dark',
         logo_url: '',
-        welcome_message: 'Bienvenido a DealScout AI',
+        welcome_message: 'Bienvenido a VerdictIQ',
         analysis_loading_message: 'Analizando la startup, por favor espera...',
         analysis_complete_message: '¡Análisis completado con éxito!',
-        footer_message: 'DealScout AI - Venture Capital Due Diligence'
+        footer_message: 'VerdictIQ - Venture Capital Due Diligence'
     },
     reports: [],
     tokenUsageData: null,
@@ -497,7 +497,7 @@
             this.user = await res.json();
             this.profileCompanyName = this.user.company_name || '';
             this.profileCompanyWebsite = this.user.company_website || '';
-            this.settingsName = this.user.organization ? this.user.organization.company_name : 'DealScout Capital';
+            this.settingsName = this.user.organization ? this.user.organization.company_name : 'VerdictIQ Capital';
             this.settingsEnabledSources = this.user.enabled_sources || [];
             this.settingsAnalysisPriorities = this.user.analysis_priorities || [];
             this.settingsCustomFocusKeywords = this.user.custom_focus_keywords || '';
@@ -917,7 +917,7 @@
         this.errorMessage = '';
         this.isLoading = true;
         this.showResult = false;
-        this.statusMessage = 'Initializing DealScout AI network...';
+        this.statusMessage = 'Initializing VerdictIQ network...';
         this.progressPercent = 5;
         this.startupUrl = urlToScan || this.startupUrl;
 
@@ -970,7 +970,7 @@
         this.errorMessage = '';
         this.isLoading = true;
         this.showResult = false;
-        this.statusMessage = 'Initializing DealScout AI network with LinkedIn profile...';
+        this.statusMessage = 'Initializing VerdictIQ network with LinkedIn profile...';
         this.progressPercent = 5;
 
         if (!this.linkedinUrl) {
@@ -1361,6 +1361,189 @@
         } catch (err) {
             console.error('Failed to load token usage stats', err);
         }
+    },
+
+    // 1. Translation System & Language Toggle State (Improvement 1)
+    uiLanguage: localStorage.getItem('ui_language') || 'es',
+    setLanguage(lang) {
+        this.uiLanguage = lang;
+        this.selectedLanguage = lang;
+        localStorage.setItem('ui_language', lang);
+    },
+    t(key) {
+        const dictionary = {
+            'nav_directory': { 'es': 'Directorio de Inversiones', 'en': 'Investor Directory' },
+            'nav_back': { 'es': 'Volver al Inicio', 'en': 'Back to Home' },
+            'nav_compare': { 'es': 'Comparar', 'en': 'Compare' },
+            'nav_settings': { 'es': 'Ajustes', 'en': 'Settings' },
+            'nav_logout': { 'es': 'Salir', 'en': 'Logout' },
+            'nav_tools': { 'es': 'Herramientas Financieras', 'en': 'Financial Tools' },
+            'nav_activity': { 'es': 'Mi Actividad', 'en': 'My Activity' },
+            'welcome_banner_title': { 'es': 'Bienvenido a VerdictIQ — Plataforma Inteligente de Due Diligence', 'en': 'Welcome to VerdictIQ — Intelligent Due Diligence Platform' },
+            'welcome_banner_desc': { 'es': 'Nuestra red de agentes autónomos está lista para analizar mercados, detectar riesgos regulatorios y realizar auditorías de hype en tiempo real.', 'en': 'Our network of autonomous agents is ready to analyze markets, detect regulatory risks, and perform real-time hype audits.' },
+            'start_analysis': { 'es': 'Empezar Nuevo Análisis', 'en': 'Start New Analysis' },
+            'language_label': { 'es': 'Idioma del Reporte / Language', 'en': 'Report Language / Idioma' },
+            'analysis_history': { 'es': 'Historial de Análisis', 'en': 'Analysis History' },
+            'no_analysis': { 'es': 'Ningún deal analizado para esta organización.', 'en': 'No deals analyzed for this organization.' },
+            'placeholder_desc': { 'es': 'Ingrese sitio web oficial o URL de LinkedIn.', 'en': 'Enter official website or LinkedIn URL.' },
+            'btn_analyze_url': { 'es': 'Analizar URL', 'en': 'Analyze URL' },
+            'btn_analyze_li': { 'es': 'Analizar LinkedIn', 'en': 'Analyze LinkedIn' },
+            'btn_analyze_pd': { 'es': 'Subir y Analizar', 'en': 'Upload & Analyze' }
+        };
+        if (dictionary[key] && dictionary[key][this.uiLanguage]) {
+            return dictionary[key][this.uiLanguage];
+        }
+        return key;
+    },
+
+    // 2. Financial Tools & Simulators State (Tools 1, 2, 3)
+    showFinancialTools: false,
+    activeFinancialTool: 'captable',
+
+    // Tool 1: Cap Table Simulator
+    ctPreMoney: 5000000,
+    ctRoundSize: 1000000,
+    ctOptionPool: 10,
+    ctFoundersShare: 80,
+    ctPreviousInvestorsShare: 20,
+
+    get capTableResult() {
+        const pre = parseFloat(this.ctPreMoney) || 0;
+        const round = parseFloat(this.ctRoundSize) || 0;
+        const post = pre + round;
+        const optionPool = parseFloat(this.ctOptionPool) || 0;
+
+        const roundShare = post > 0 ? (round / post) * 100 : 0;
+        const remainingForExisting = 100 - roundShare - optionPool;
+
+        const rawFounders = parseFloat(this.ctFoundersShare) || 0;
+        const rawPrevInvs = parseFloat(this.ctPreviousInvestorsShare) || 0;
+        const totalRawExisting = rawFounders + rawPrevInvs;
+
+        let dilutedFounders = 0;
+        let dilutedPrevInvs = 0;
+
+        if (totalRawExisting > 0) {
+            dilutedFounders = rawFounders * (remainingForExisting / 100);
+            dilutedPrevInvs = rawPrevInvs * (remainingForExisting / 100);
+        }
+
+        return {
+            postMoney: post,
+            roundShare: roundShare.toFixed(2),
+            optionPoolShare: optionPool.toFixed(2),
+            foundersShare: dilutedFounders.toFixed(2),
+            prevInvsShare: dilutedPrevInvs.toFixed(2)
+        };
+    },
+
+    // Tool 2: Term Sheet Generator
+    tsCompanyName: 'SaaS Innovación',
+    tsInvestors: 'Apex Ventures',
+    tsAmount: 1000000,
+    tsValuation: 5000000,
+    tsBoardSeats: 3,
+    tsLiquidationMultiple: 1,
+    tsVestingYears: 4,
+    tsVestingCliff: 1,
+
+    get termSheetText() {
+        const amount_fmt = (parseFloat(this.tsAmount) || 0).toLocaleString();
+        const pre_fmt = (parseFloat(this.tsValuation) || 0).toLocaleString();
+        const post_fmt = ((parseFloat(this.tsValuation) || 0) + (parseFloat(this.tsAmount) || 0)).toLocaleString();
+
+        if (this.uiLanguage === 'es') {
+            return `RESUMEN DE TÉRMINOS DE INVERSIÓN (TERM SHEET)
+--------------------------------------------------
+EMPRESA EMISORA: ${this.tsCompanyName}
+INVERSORES PRINCIPALES: ${this.tsInvestors}
+
+1. MONTO DE LA INVERSIÓN: $${amount_fmt} USD.
+2. VALORACIÓN PRE-MONEY: $${pre_fmt} USD.
+3. VALORACIÓN POST-MONEY: $${post_fmt} USD.
+4. ESTRUCTURA DE LA JUNTA DIRECTIVA: La Junta constará de ${this.tsBoardSeats} miembros (1 designado por los Inversores, 1 designado por los Fundadores, y 1 miembro independiente).
+5. PREFERENCIA DE LIQUIDACIÓN: Preferencia de liquidación no participativa de ${this.tsLiquidationMultiple}x sobre las Acciones Preferentes.
+6. VESTING DE FUNDADORES: Las acciones de los fundadores estarán sujetas a un calendario de vesting de ${this.tsVestingYears} años con un cliff de ${this.tsVestingCliff} año(s), devengándose mensualmente de forma proporcional a partir de entonces.
+
+Este documento no es vinculante y constituye una base para la preparación de los acuerdos de inversión definitivos.`;
+        } else {
+            return `TERM SHEET SUMMARY & PROPOSAL
+--------------------------------------------------
+ISSUER: ${this.tsCompanyName}
+LEAD INVESTORS: ${this.tsInvestors}
+
+1. INVESTMENT AMOUNT: $${amount_fmt} USD.
+2. PRE-MONEY VALUATION: $${pre_fmt} USD.
+3. POST-MONEY VALUATION: $${post_fmt} USD.
+4. BOARD OF DIRECTORS: The Board shall consist of ${this.tsBoardSeats} members (1 designated by Investors, 1 designated by Founders, and 1 independent member).
+5. LIQUIDATION PREFERENCE: Non-participating ${this.tsLiquidationMultiple}x liquidation preference on Preferred Shares.
+6. FOUNDER VESTING: Founder shares shall be subject to a ${this.tsVestingYears}-year vesting schedule with a ${this.tsVestingCliff}-year cliff, vesting monthly pro-rata thereafter.
+
+This Term Sheet is non-binding and serves as a framework for drafting definitive investment agreements.`;
+        }
+    },
+
+    // Tool 3: Startup Valuation Calculator
+    valRevenue: 200000,
+    valGrowth: 100,
+    valSector: 'saas',
+    valTeamSize: 5,
+    valPrototypeReady: true,
+    valStrategicAlliances: true,
+    valSalesTraded: true,
+    valScorecardGrade: 80,
+
+    get estimatedValuation() {
+        const rev = parseFloat(this.valRevenue) || 0;
+        const growth = parseFloat(this.valGrowth) || 0;
+
+        // ARR Multiples by Sector
+        const multiples = {
+            'saas': 8,
+            'fintech': 10,
+            'deeptech': 12,
+            'ecommerce': 3
+        };
+        const sectorMult = multiples[this.valSector] || 5;
+        // Adjusted multiples based on annual growth multiplier
+        const growthMult = 1 + (growth / 100);
+        const multiplesValuation = rev * sectorMult * growthMult;
+
+        // Berkus Method estimation (max $2.5M)
+        let berkusVal = 0;
+        if (this.valPrototypeReady) berkusVal += 500000; // Technology/Prototype
+        if (parseInt(this.valTeamSize) >= 3) berkusVal += 500000; // Quality Management
+        if (this.valStrategicAlliances) berkusVal += 500000; // Strategic Alliances
+        if (this.valSalesTraded) berkusVal += 500000; // Initial Sales
+        berkusVal += 500000; // Product rollout/market deployment
+
+        // Scorecard Method: sector base peer avg (e.g. $4M) * Scorecard Grade
+        const basePeerVal = 4000000;
+        const scorecardGrade = parseFloat(this.valScorecardGrade) || 80;
+        const scorecardVal = basePeerVal * (scorecardGrade / 100);
+
+        return {
+            multiples: multiplesValuation,
+            berkus: berkusVal,
+            scorecard: scorecardVal,
+            average: (multiplesValuation + berkusVal + scorecardVal) / 3
+        };
+    },
+
+    // 3. Activity History State (Improvement 3)
+    showActivityHistory: false,
+    activityLogs: [],
+    async loadActivityLogs() {
+        try {
+            const res = await fetch('/me/audit-logs', {
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            if (res.ok) {
+                this.activityLogs = await res.json();
+            }
+        } catch (err) {
+            console.error('Failed to load user activity/audit logs', err);
+        }
     }
 }">
 
@@ -1384,11 +1567,25 @@
                 </div>
             </template>
             <div>
-                <h1 class="font-bold text-lg tracking-tight bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent" x-text="branding.platform_name || 'DealScout AI'"></h1>
+                <h1 class="font-bold text-lg tracking-tight bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent" x-text="branding.platform_name || 'VerdictIQ'"></h1>
                 <p class="text-xs text-slate-400">Enterprise Due Diligence Platform</p>
             </div>
         </div>
         <div class="flex items-center space-x-4">
+            <!-- Language Toggle Button (Improvement 1) -->
+            <div class="relative" x-data="{ openLang: false }">
+                <button @click="openLang = !openLang" class="text-xs font-bold text-slate-300 hover:text-white px-3 py-1.5 rounded-lg border border-slate-800 bg-slate-950/40 flex items-center space-x-1">
+                    <span x-text="uiLanguage === 'es' ? '🇪🇸 Español' : '🇺🇸 English'"></span>
+                    <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                </button>
+                <div x-show="openLang" @click.away="openLang = false" class="absolute right-0 mt-2 w-32 bg-slate-900 border border-slate-800 rounded-xl shadow-xl py-1 z-50 text-xs">
+                    <button @click="setLanguage('es'); openLang = false" class="w-full text-left px-4 py-2 hover:bg-slate-800 text-slate-300 hover:text-white font-semibold">🇪🇸 Español</button>
+                    <button @click="setLanguage('en'); openLang = false" class="w-full text-left px-4 py-2 hover:bg-slate-800 text-slate-300 hover:text-white font-semibold">🇺🇸 English</button>
+                </div>
+            </div>
+
             <!-- Theme Toggle Button -->
             <button @click="toggleTheme()" class="text-xs font-bold text-slate-300 hover:text-white px-3 py-1.5 rounded-lg border border-slate-800 bg-slate-950/40 flex items-center space-x-1" title="Alternar tema claro/oscuro">
                 <template x-if="uiTheme === 'light'">
@@ -1449,11 +1646,17 @@
                             Admin Moderación
                         </button>
                     </template>
+                    <button @click="showFinancialTools = true" class="text-[11px] sm:text-xs bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 px-3 py-1.5 rounded-lg font-bold">
+                        <span x-text="t('nav_tools')"></span>
+                    </button>
+                    <button @click="showActivityHistory = true; loadActivityLogs();" class="text-[11px] sm:text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg font-semibold text-purple-400 border border-purple-400/20">
+                        <span x-text="t('nav_activity')"></span>
+                    </button>
                     <button @click="showComparison = true" class="text-[11px] sm:text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg font-semibold text-cyan-400 border border-cyan-400/20">
-                        Comparar
+                        <span x-text="t('nav_compare')"></span>
                     </button>
                     <button @click="showSettings = true" class="text-[11px] sm:text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg font-semibold">
-                        Ajustes
+                        <span x-text="t('nav_settings')"></span>
                     </button>
                     <button @click="handleLogout()" class="text-[11px] sm:text-xs bg-red-950/40 hover:bg-red-900/40 text-red-400 px-3 py-1.5 rounded-lg font-semibold border border-red-500/10">
                         Salir
@@ -1557,9 +1760,9 @@
             <div class="w-full mb-8">
                 <div class="p-5 rounded-2xl bg-cyan-950/20 border border-cyan-900/50 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
                     <div>
-                        <span class="text-[10px] font-bold uppercase tracking-widest bg-cyan-400/20 text-cyan-400 px-2.5 py-1 rounded-full" x-text="branding.platform_name || 'DealScout AI'"></span>
-                        <h3 class="text-white font-bold text-md mt-2" x-text="branding.welcome_message || 'Bienvenido a la versión preliminar de DealScout AI'"></h3>
-                        <p class="text-slate-400 text-xs mt-1">Estamos activamente optimizando nuestros agentes. Nuevas herramientas de automatización de reportes se integrarán próximamente de forma automática.</p>
+                        <span class="text-[10px] font-bold uppercase tracking-widest bg-cyan-400/20 text-cyan-400 px-2.5 py-1 rounded-full" x-text="branding.platform_name || 'VerdictIQ'"></span>
+                        <h3 class="text-white font-bold text-md mt-2" x-text="branding.welcome_message || t('welcome_banner_title')"></h3>
+                        <p class="text-slate-400 text-xs mt-1" x-text="t('welcome_banner_desc')"></p>
                     </div>
                 </div>
             </div>
@@ -1697,11 +1900,11 @@
                     <!-- Left Sidebar (Deals List / Settings) -->
                     <div class="lg:col-span-1 space-y-6">
                         <div class="glass p-6 rounded-2xl">
-                            <h3 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Empezar Nuevo Análisis</h3>
+                            <h3 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4" x-text="t('start_analysis')"></h3>
 
                             <!-- Language Selector Dropdown -->
                             <div class="mb-4">
-                                <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Idioma del Reporte / Language</label>
+                                <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1" x-text="t('language_label')"></label>
                                 <select x-model="selectedLanguage" class="w-full px-4 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 focus:border-cyan-500 outline-none cursor-pointer">
                                     <option value="es">Español</option>
                                     <option value="en">English</option>
@@ -1963,7 +2166,7 @@
                                 <div class="mt-4 p-4 rounded-2xl bg-slate-950/40 border border-slate-900 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-6">
                                     <div>
                                         <h4 class="text-xs font-bold uppercase text-slate-400">Final Decision Calibration</h4>
-                                        <p class="text-[10px] text-slate-500">Record your fund's actual decision to calibrate DealScout's future scoring weights.</p>
+                                        <p class="text-[10px] text-slate-500">Record your fund's actual decision to calibrate VerdictIQ's future scoring weights.</p>
                                     </div>
                                     <div class="flex items-center gap-2">
                                         <select x-model="userDecision" class="bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none">
@@ -2237,7 +2440,7 @@
     <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4" x-show="showFeedbackModal" style="display: none;">
         <div class="glass p-8 rounded-3xl max-w-lg w-full text-left">
             <h3 class="text-xl font-bold mb-2 text-white">¡Análisis Completo! Deja tu experiencia</h3>
-            <p class="text-xs text-slate-400 mb-4">Ayúdanos a mejorar DealScout AI compartiendo tu opinión.</p>
+            <p class="text-xs text-slate-400 mb-4">Ayúdanos a mejorar VerdictIQ compartiendo tu opinión.</p>
 
             <div class="space-y-4 text-xs">
                 <div>
@@ -2990,6 +3193,310 @@
         </div>
     </div>
 
+    <!-- Financial Tools Modal (Tools 1, 2, 3) -->
+    <div class="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto" x-show="showFinancialTools" style="display: none;">
+        <div class="glass-premium p-8 rounded-3xl max-w-5xl w-full text-left">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h3 class="text-2xl font-black text-white" x-text="uiLanguage === 'es' ? 'Herramientas Financieras Venture Capital' : 'Venture Capital Financial Tools'"></h3>
+                    <p class="text-xs text-slate-400" x-text="uiLanguage === 'es' ? 'Calculadoras, Simuladores y Generadores para Fundadores e Inversores' : 'Calculators, Simulators, and Generators for Founders & Investors'"></p>
+                </div>
+                <button @click="showFinancialTools = false" class="text-slate-400 hover:text-white font-bold text-sm bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl" x-text="uiLanguage === 'es' ? 'Cerrar' : 'Close'"></button>
+            </div>
+
+            <!-- Tabs selector for tools -->
+            <div class="flex border-b border-slate-800/80 bg-slate-950/40 rounded-xl p-1 mb-6">
+                <button @click="activeFinancialTool = 'captable'" :class="activeFinancialTool === 'captable' ? 'bg-slate-800 text-cyan-400' : 'text-slate-400'" class="flex-grow py-3 text-center text-xs font-bold rounded-lg transition-all" x-text="uiLanguage === 'es' ? '📊 Cap Table & Dilución' : '📊 Cap Table & Dilution'"></button>
+                <button @click="activeFinancialTool = 'termsheet'" :class="activeFinancialTool === 'termsheet' ? 'bg-slate-800 text-cyan-400' : 'text-slate-400'" class="flex-grow py-3 text-center text-xs font-bold rounded-lg transition-all" x-text="uiLanguage === 'es' ? '📝 Generador de Term Sheet' : '📝 Term Sheet Generator'"></button>
+                <button @click="activeFinancialTool = 'valuation'" :class="activeFinancialTool === 'valuation' ? 'bg-slate-800 text-cyan-400' : 'text-slate-400'" class="flex-grow py-3 text-center text-xs font-bold rounded-lg transition-all" x-text="uiLanguage === 'es' ? '💎 Estimador de Valoración' : '💎 Valuation Estimator'"></button>
+            </div>
+
+            <!-- Content for Cap Table Simulator (Tool 1) -->
+            <div x-show="activeFinancialTool === 'captable'" class="grid grid-cols-1 lg:grid-cols-2 gap-8 text-xs">
+                <div class="space-y-4">
+                    <h4 class="text-sm font-bold text-slate-300" x-text="uiLanguage === 'es' ? 'Parámetros del Cap Table' : 'Cap Table Inputs'"></h4>
+                    <div>
+                        <label class="block font-bold text-slate-400 mb-1" x-text="uiLanguage === 'es' ? 'Valoración Pre-Money (USD)' : 'Pre-Money Valuation (USD)'"></label>
+                        <input type="number" x-model.number="ctPreMoney" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-white outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-400 mb-1" x-text="uiLanguage === 'es' ? 'Monto de la Ronda de Inversión (USD)' : 'Round Investment Size (USD)'"></label>
+                        <input type="number" x-model.number="ctRoundSize" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-white outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-400 mb-1" x-text="uiLanguage === 'es' ? 'Reserva para Empleados / Option Pool (%)' : 'Employee Option Pool (%)'"></label>
+                        <input type="number" x-model.number="ctOptionPool" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-white outline-none">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block font-bold text-slate-400 mb-1" x-text="uiLanguage === 'es' ? 'Acciones Fundadores (%)' : 'Founder Original Shares (%)'"></label>
+                            <input type="number" x-model.number="ctFoundersShare" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-white outline-none">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-400 mb-1" x-text="uiLanguage === 'es' ? 'Socios / Inversores Previos (%)' : 'Previous Investors Shares (%)'"></label>
+                            <input type="number" x-model.number="ctPreviousInvestorsShare" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-white outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cap Table Results & Visual SVG Donut Chart (Improvement 2) -->
+                <div class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-6">
+                    <div class="border-b border-slate-800 pb-3">
+                        <h4 class="text-sm font-bold text-emerald-400" x-text="uiLanguage === 'es' ? 'Estructura Post-Ronda y Dilución' : 'Post-Money Capital Structure'"></h4>
+                        <p class="text-xs text-slate-400 mt-1" x-text="uiLanguage === 'es' ? 'Resultados del cálculo en tiempo real' : 'Real-time calculation results'"></p>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 text-center">
+                        <div class="p-3 bg-slate-950 rounded-xl border border-slate-800/80">
+                            <span class="text-slate-500 block text-[10px] uppercase font-bold" x-text="uiLanguage === 'es' ? 'Valoración Post-Money' : 'Post-Money Valuation'"></span>
+                            <span class="text-lg font-black text-white" x-text="'$' + capTableResult.postMoney.toLocaleString() + ' USD'"></span>
+                        </div>
+                        <div class="p-3 bg-slate-950 rounded-xl border border-slate-800/80">
+                            <span class="text-slate-500 block text-[10px] uppercase font-bold" x-text="uiLanguage === 'es' ? 'Dilución Fundadores' : 'Founder Dilution'"></span>
+                            <span class="text-lg font-black text-cyan-400" x-text="(100 - parseFloat(capTableResult.foundersShare)).toFixed(2) + '%'"></span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center py-1">
+                            <span class="text-slate-300 font-semibold" x-text="uiLanguage === 'es' ? '👨‍💻 Participación Fundadores' : '👨‍💻 Founders Stake'"></span>
+                            <span class="font-extrabold text-white" x-text="capTableResult.foundersShare + '%'"></span>
+                        </div>
+                        <div class="flex justify-between items-center py-1">
+                            <span class="text-slate-300 font-semibold" x-text="uiLanguage === 'es' ? '🤝 Participación Inversores Previos' : '🤝 Previous Investors'"></span >
+                            <span class="font-extrabold text-white" x-text="capTableResult.prevInvsShare + '%'"></span>
+                        </div>
+                        <div class="flex justify-between items-center py-1">
+                            <span class="text-slate-300 font-semibold" x-text="uiLanguage === 'es' ? '💵 Participación Nueva Ronda' : '💵 New Round Investors'"></span>
+                            <span class="font-extrabold text-cyan-400" x-text="capTableResult.roundShare + '%'"></span>
+                        </div>
+                        <div class="flex justify-between items-center py-1">
+                            <span class="text-slate-300 font-semibold" x-text="uiLanguage === 'es' ? '✨ Employee Option Pool' : '✨ Employee Option Pool'"></span>
+                            <span class="font-extrabold text-white" x-text="capTableResult.optionPoolShare + '%'"></span>
+                        </div>
+                    </div>
+
+                    <!-- Interactive Dilution SVG Donut Chart (Improvement 2) -->
+                    <div class="flex justify-center items-center py-4 bg-slate-950/60 rounded-2xl border border-slate-800/60">
+                        <svg width="180" height="180" viewBox="0 0 100 100" class="transform -rotate-90">
+                            <!-- Outer circle track -->
+                            <circle cx="50" cy="50" r="40" stroke="#1e293b" stroke-width="12" fill="none" />
+                            <!-- Founders segment (cyan) -->
+                            <circle cx="50" cy="50" r="40" stroke="#22d3ee" stroke-width="12" fill="none"
+                                    :stroke-dasharray="251.2"
+                                    :stroke-dashoffset="251.2 - (251.2 * parseFloat(capTableResult.foundersShare)) / 100" />
+                            <!-- New Round segment (emerald) -->
+                            <circle cx="50" cy="50" r="40" stroke="#10b981" stroke-width="12" fill="none"
+                                    :stroke-dasharray="251.2"
+                                    :stroke-dashoffset="251.2 - (251.2 * parseFloat(capTableResult.roundShare)) / 100"
+                                    :transform="'rotate(' + (360 * parseFloat(capTableResult.foundersShare) / 100) + ' 50 50)'" />
+                            <!-- Option Pool segment (amber) -->
+                            <circle cx="50" cy="50" r="40" stroke="#f59e0b" stroke-width="12" fill="none"
+                                    :stroke-dasharray="251.2"
+                                    :stroke-dashoffset="251.2 - (251.2 * parseFloat(capTableResult.optionPoolShare)) / 100"
+                                    :transform="'rotate(' + (360 * (parseFloat(capTableResult.foundersShare) + parseFloat(capTableResult.roundShare)) / 100) + ' 50 50)'" />
+                        </svg>
+                        <div class="ml-6 space-y-1.5 text-[10px] font-bold text-slate-400">
+                            <div class="flex items-center"><span class="w-2.5 h-2.5 rounded bg-cyan-400 mr-1.5"></span><span x-text="uiLanguage === 'es' ? 'Fundadores' : 'Founders'"></span></div>
+                            <div class="flex items-center"><span class="w-2.5 h-2.5 rounded bg-emerald-500 mr-1.5"></span><span x-text="uiLanguage === 'es' ? 'Nueva Ronda' : 'New Round'"></span></div>
+                            <div class="flex items-center"><span class="w-2.5 h-2.5 rounded bg-amber-500 mr-1.5"></span><span>Option Pool</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Content for Term Sheet Generator (Tool 2) -->
+            <div x-show="activeFinancialTool === 'termsheet'" class="grid grid-cols-1 lg:grid-cols-2 gap-8 text-xs" style="display: none;">
+                <div class="space-y-4">
+                    <h4 class="text-sm font-bold text-slate-300" x-text="uiLanguage === 'es' ? 'Parámetros del Acuerdo' : 'Term Sheet Inputs'"></h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block font-bold text-slate-400 mb-1" x-text="uiLanguage === 'es' ? 'Nombre de la Startup' : 'Startup Name'"></label>
+                            <input type="text" x-model="tsCompanyName" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-white outline-none">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-400 mb-1" x-text="uiLanguage === 'es' ? 'Inversor Principal' : 'Lead Investor'"></label>
+                            <input type="text" x-model="tsInvestors" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-white outline-none">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block font-bold text-slate-400 mb-1" x-text="uiLanguage === 'es' ? 'Monto Inversión (USD)' : 'Investment Amount (USD)'"></label>
+                            <input type="number" x-model.number="tsAmount" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-white outline-none">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-400 mb-1" x-text="uiLanguage === 'es' ? 'Valoración Pre-Money (USD)' : 'Pre-Money Valuation (USD)'"></label>
+                            <input type="number" x-model.number="tsValuation" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-white outline-none">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <label class="block font-bold text-slate-400 mb-1" x-text="uiLanguage === 'es' ? 'Asientos Junta' : 'Board Seats'"></label>
+                            <input type="number" x-model.number="tsBoardSeats" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-white outline-none">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-400 mb-1" x-text="uiLanguage === 'es' ? 'Preferencia Liq.' : 'Liquidation Preference'"></label>
+                            <select x-model.number="tsLiquidationMultiple" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-white outline-none">
+                                <option value="1">1x</option>
+                                <option value="2">2x</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-400 mb-1">Vesting (Años)</label>
+                            <input type="number" x-model.number="tsVestingYears" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-white outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Output Term Sheet Draft -->
+                <div class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col justify-between space-y-4" x-data="{ tsCopied: false }">
+                    <div>
+                        <h4 class="text-sm font-bold text-cyan-400 mb-2" x-text="uiLanguage === 'es' ? 'Borrador Legal del Term Sheet' : 'Legal Term Sheet Draft'"></h4>
+                        <textarea readonly class="w-full h-72 bg-slate-950 border border-slate-850 rounded-xl p-4 font-mono text-[11px] leading-relaxed text-slate-300 outline-none select-all" x-text="termSheetText"></textarea>
+                    </div>
+                    <button @click="navigator.clipboard.writeText(termSheetText); tsCopied = true; setTimeout(() => tsCopied = false, 2000)" class="w-full py-3 bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition">
+                        <span x-text="tsCopied ? (uiLanguage === 'es' ? '¡Copiado al portapapeles!' : 'Copied!') : (uiLanguage === 'es' ? 'Copiar Borrador Completo' : 'Copy Term Sheet Draft')"></span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Content for Startup Valuation Estimator (Tool 3) -->
+            <div x-show="activeFinancialTool === 'valuation'" class="grid grid-cols-1 lg:grid-cols-2 gap-8 text-xs" style="display: none;">
+                <div class="space-y-4">
+                    <h4 class="text-sm font-bold text-slate-300" x-text="uiLanguage === 'es' ? 'Datos del Negocio / Financieros' : 'Financials & Business Data'"></h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block font-bold text-slate-400 mb-1" x-text="uiLanguage === 'es' ? 'Ingresos Anuales (ARR) (USD)' : 'Annual Recurring Revenue (ARR) (USD)'"></label>
+                            <input type="number" x-model.number="valRevenue" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-white outline-none">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-400 mb-1" x-text="uiLanguage === 'es' ? 'Crecimiento de Ventas Anual (%)' : 'Annual Revenue Growth (%)'"></label>
+                            <input type="number" x-model.number="valGrowth" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-white outline-none">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block font-bold text-slate-400 mb-1" x-text="uiLanguage === 'es' ? 'Sector de la Startup' : 'Industry Sector'"></label>
+                            <select x-model="valSector" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-white outline-none">
+                                <option value="saas">SaaS (Software as a Service)</option>
+                                <option value="fintech">FinTech (Finanzas)</option>
+                                <option value="deeptech">DeepTech / IA Avanzada</option>
+                                <option value="ecommerce">E-Commerce / Retail</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-400 mb-1" x-text="uiLanguage === 'es' ? 'Tamaño del Equipo (Miembros)' : 'Team Size (Members)'"></label>
+                            <input type="number" x-model.number="valTeamSize" class="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-white outline-none">
+                        </div>
+                    </div>
+
+                    <!-- Qualitative Checks -->
+                    <div class="p-4 bg-slate-900/50 rounded-xl border border-slate-800/80 space-y-2">
+                        <h5 class="font-bold text-slate-300" x-text="uiLanguage === 'es' ? 'Factores Cualitativos (Método Berkus)' : 'Qualitative Factors (Berkus Method)'"></h5>
+                        <label class="flex items-center space-x-2 cursor-pointer text-slate-400 hover:text-white">
+                            <input type="checkbox" x-model="valPrototypeReady" class="rounded bg-slate-950 border-slate-800 text-cyan-500 focus:ring-cyan-500">
+                            <span x-text="uiLanguage === 'es' ? 'Prototipo o Producto Mínimo Viable (MVP) funcional' : 'Functional prototype or MVP'"></span>
+                        </label>
+                        <label class="flex items-center space-x-2 cursor-pointer text-slate-400 hover:text-white">
+                            <input type="checkbox" x-model="valStrategicAlliances" class="rounded bg-slate-950 border-slate-800 text-cyan-500 focus:ring-cyan-500">
+                            <span x-text="uiLanguage === 'es' ? 'Alianzas Estratégicas firmadas o en negociación activa' : 'Signed strategic alliances'"></span>
+                        </label>
+                        <label class="flex items-center space-x-2 cursor-pointer text-slate-400 hover:text-white">
+                            <input type="checkbox" x-model="valSalesTraded" class="rounded bg-slate-950 border-slate-800 text-cyan-500 focus:ring-cyan-500">
+                            <span x-text="uiLanguage === 'es' ? 'Ventas iniciales registradas / Tracción comercial' : 'Initial sales / Customer traction'"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Valuation Estimation Output and Dynamic Bar Chart SVG (Improvement 2) -->
+                <div class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-6">
+                    <div>
+                        <h4 class="text-sm font-bold text-emerald-400" x-text="uiLanguage === 'es' ? 'Comparación de Métodos de Valoración' : 'Valuation Method Comparison'"></h4>
+                        <p class="text-xs text-slate-400 mt-1" x-text="uiLanguage === 'es' ? 'Rango estimado de valoración pre-money en USD' : 'Pre-money valuation estimates in USD'"></p>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center py-1">
+                            <span class="text-slate-300 font-semibold" x-text="uiLanguage === 'es' ? '📈 Múltiplos de Ingresos (ARR)' : '📈 Revenue (ARR) Multiples'"></span>
+                            <span class="font-extrabold text-white text-sm" x-text="'$' + estimatedValuation.multiples.toLocaleString() + ' USD'"></span>
+                        </div>
+                        <div class="flex justify-between items-center py-1">
+                            <span class="text-slate-300 font-semibold" x-text="uiLanguage === 'es' ? '🏅 Método Berkus (Inicial)' : '🏅 Berkus Method (Seed)'"></span>
+                            <span class="font-extrabold text-white text-sm" x-text="'$' + estimatedValuation.berkus.toLocaleString() + ' USD'"></span>
+                        </div>
+                        <div class="flex justify-between items-center py-1">
+                            <span class="text-slate-300 font-semibold" x-text="uiLanguage === 'es' ? '📊 Método Scorecard (Sectores)' : '📊 Scorecard Method (Peer)'"></span>
+                            <span class="font-extrabold text-white text-sm" x-text="'$' + estimatedValuation.scorecard.toLocaleString() + ' USD'"></span>
+                        </div>
+                        <div class="flex justify-between items-center py-3 border-t border-slate-800 bg-slate-950/40 px-3 rounded-xl">
+                            <span class="text-cyan-400 font-black text-sm" x-text="uiLanguage === 'es' ? '🏆 Rango Promedio Recomendado' : '🏆 Average Suggested Valuation'"></span>
+                            <span class="font-black text-cyan-400 text-lg" x-text="'$' + estimatedValuation.average.toLocaleString() + ' USD'"></span>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic SVG Bar Chart for estimates comparison (Improvement 2) -->
+                    <div class="py-4 bg-slate-950/60 rounded-2xl border border-slate-800/60 p-4">
+                        <svg width="100%" height="110" viewBox="0 0 350 110">
+                            <!-- Multiples Bar -->
+                            <rect x="10" y="10" :width="Math.min(300, (estimatedValuation.multiples / 10000000) * 300) || 5" height="15" rx="3" fill="#10b981" />
+                            <text x="15" y="22" font-family="monospace" font-size="9" font-weight="bold" fill="#020617">ARR Multiple</text>
+
+                            <!-- Berkus Bar -->
+                            <rect x="10" y="40" :width="Math.min(300, (estimatedValuation.berkus / 10000000) * 300) || 5" height="15" rx="3" fill="#f59e0b" />
+                            <text x="15" y="52" font-family="monospace" font-size="9" font-weight="bold" fill="#020617">Berkus Method</text>
+
+                            <!-- Scorecard Bar -->
+                            <rect x="10" y="70" :width="Math.min(300, (estimatedValuation.scorecard / 10000000) * 300) || 5" height="15" rx="3" fill="#22d3ee" />
+                            <text x="15" y="82" font-family="monospace" font-size="9" font-weight="bold" fill="#020617">Scorecard Method</text>
+                        </svg>
+                        <div class="text-[9px] text-slate-500 font-bold text-center mt-1" x-text="uiLanguage === 'es' ? 'Escala de barra calibrada hasta $10,000,000 USD max' : 'Bar scale calibrated up to $10,000,000 USD max'"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Activity History Modal (Improvement 3) -->
+    <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto" x-show="showActivityHistory" style="display: none;">
+        <div class="glass-premium p-8 rounded-3xl max-w-3xl w-full text-left">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h3 class="text-2xl font-black text-white" x-text="uiLanguage === 'es' ? 'Historial de Actividad y Auditoría' : 'Activity History & Audit Trail'"></h3>
+                    <p class="text-xs text-slate-400" x-text="uiLanguage === 'es' ? 'Log detallado de acciones realizadas en tu organización' : 'Detailed action logs performed in your organization'"></p>
+                </div>
+                <button @click="showActivityHistory = false" class="text-slate-400 hover:text-white font-bold text-sm bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl" x-text="uiLanguage === 'es' ? 'Cerrar' : 'Close'"></button>
+            </div>
+
+            <div class="overflow-x-auto max-h-[60vh] overflow-y-auto rounded-xl border border-slate-800 bg-slate-950/20 p-2">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="border-b border-slate-800 text-slate-400 uppercase tracking-widest text-[9px] font-bold">
+                            <th class="py-3 px-4" x-text="uiLanguage === 'es' ? 'Usuario' : 'User'"></th>
+                            <th class="py-3 px-4" x-text="uiLanguage === 'es' ? 'Acción' : 'Action'"></th>
+                            <th class="py-3 px-4" x-text="uiLanguage === 'es' ? 'Objetivo / Empresa' : 'Target / Company'"></th>
+                            <th class="py-3 px-4" x-text="uiLanguage === 'es' ? 'Fecha y Hora' : 'Timestamp'"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="log in activityLogs" :key="log.id">
+                            <tr class="border-b border-slate-900/60 hover:bg-slate-900/20 text-slate-300">
+                                <td class="py-3.5 px-4 font-semibold text-white" x-text="log.user_email"></td>
+                                <td class="py-3.5 px-4" x-text="log.action"></td>
+                                <td class="py-3.5 px-4 font-mono text-cyan-400" x-text="log.target_company || 'N/A'"></td>
+                                <td class="py-3.5 px-4 text-slate-400" x-text="new Date(log.timestamp).toLocaleString()"></td>
+                            </tr>
+                        </template>
+                        <template x-if="activityLogs.length === 0">
+                            <tr>
+                                <td colspan="4" class="py-8 text-center text-slate-500 italic" x-text="uiLanguage === 'es' ? 'No se registran actividades de auditoría aún.' : 'No audit activity logs recorded yet.'"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <!-- Comparison Modal -->
     <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto" x-show="showComparison" style="display: none;">
         <div class="glass-premium p-8 rounded-3xl max-w-4xl w-full text-left">
@@ -3095,7 +3602,7 @@
     <footer class="w-full border-t border-slate-900 bg-slate-950/80 backdrop-blur-md py-6 text-center z-10 text-xs text-slate-500 mt-12">
         <div class="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center gap-4">
             <div class="text-left space-y-1">
-                <div>&copy; 2026 <span x-text="branding.platform_name || 'DealScout AI'"></span>. All rights reserved. <span x-text="branding.footer_message || 'Enterprise Venture Intelligence.'"></span></div>
+                <div>&copy; 2026 <span x-text="branding.platform_name || 'VerdictIQ'"></span>. All rights reserved. <span x-text="branding.footer_message || 'Enterprise Venture Intelligence.'"></span></div>
                 <div class="text-[10px] text-slate-600">This platform is built upon a MIT licensed clone of SURESHBEEKHANI/CrewAI-End-to-End with enterprise improvements.</div>
             </div>
             <div class="flex items-center space-x-6">

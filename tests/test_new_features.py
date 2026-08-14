@@ -422,6 +422,50 @@ class TestNewFeatures(unittest.TestCase):
         self.assertEqual(resp_invalid.status_code, 400)
         self.assertIn("no es una de las conocidas en el CONFIG_REGISTRY", resp_invalid.json()["detail"])
 
+    def test_user_audit_logs(self):
+        """Verify GET /me/audit-logs retrieves logs with multi-tenant isolation."""
+        from vcdiligence.database import AuditLog
+        analyst_headers = {"Authorization": f"Bearer {self.analyst_token}"}
+
+        # 1. Populate log for Org 1
+        log_record = AuditLog(
+            user_id=self.analyst.id,
+            user_email=self.analyst.email,
+            organization_id=self.analyst.organization_id,
+            action="test_isolated_action",
+            target_company="Stripe Inc"
+        )
+        self.db.add(log_record)
+        self.db.commit()
+
+        # 2. Query endpoint -> Should return the record
+        resp = self.client.get("/me/audit-logs", headers=analyst_headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(len(resp.json()) >= 1)
+        self.assertEqual(resp.json()[0]["action"], "test_isolated_action")
+        self.assertEqual(resp.json()[0]["target_company"], "Stripe Inc")
+
+        # 3. Query from isolated user in another org -> should NOT see Org 1 log
+        other_user_token = create_access_token({"sub": "director@spacex.com"})
+        other_user = User(
+            email="director@spacex.com",
+            hashed_password=hash_password("spacexpass"),
+            role="analista",
+            organization_id=999 # Isolated Org
+        )
+        self.db.add(other_user)
+        self.db.commit()
+
+        resp_isolated = self.client.get("/me/audit-logs", headers={"Authorization": f"Bearer {other_user_token}"})
+        self.assertEqual(resp_isolated.status_code, 200)
+        # Should be empty since SpaceX user has no actions yet
+        self.assertEqual(len(resp_isolated.json()), 0)
+
+        # Cleanup SpaceX user
+        self.db.delete(other_user)
+        self.db.delete(log_record)
+        self.db.commit()
+
     def test_generate_hype_and_qa_logic(self):
         """Verify the rule-based and structure of generate_hype_and_qa helper."""
         from vcdiligence.parser import generate_hype_and_qa

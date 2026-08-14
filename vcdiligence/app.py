@@ -30,7 +30,7 @@ from vcdiligence.pdf_generator import generate_report_pdf
 from vcdiligence.crew import MarketResearchCrew
 from vcdiligence.tasks import run_due_diligence_task
 
-app = FastAPI(title="DealScout AI — Enterprise Due Diligence")
+app = FastAPI(title="VerdictIQ — Enterprise Due Diligence")
 
 # Enable CORS for easier client integration
 allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:10000")
@@ -173,7 +173,7 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
             referred_by_id = referrer.id
 
     # Create Organization or map to default
-    org_id = 1 # default is DealScout Capital
+    org_id = 1 # default is VerdictIQ Capital
     if req.account_type == "empresa" and req.company_name:
         # Create a new organization for white-labeling
         new_org = Organization(company_name=req.company_name)
@@ -305,6 +305,20 @@ def get_me(current_user: User = Depends(get_current_user), db: Session = Depends
             "logo_path": org.logo_path
         } if org else None
     }
+
+@app.get("/me/audit-logs")
+def get_user_audit_logs(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Retrieves the audit/activity logs for the current user's organization."""
+    logs = db.query(AuditLog).filter_by(organization_id=current_user.organization_id).order_by(AuditLog.timestamp.desc()).limit(50).all()
+    return [
+        {
+            "id": l.id,
+            "user_email": l.user_email,
+            "action": l.action,
+            "target_company": l.target_company,
+            "timestamp": l.timestamp.isoformat()
+        } for l in logs
+    ]
 
 # ----------------- TESTIMONIAL ENDPOINTS -----------------
 
@@ -470,9 +484,9 @@ def submit_error_report(
     db.refresh(err_report)
 
     # SMTP Alert Notification
-    subject = f"⚠️ [DealScout AI Bug Report] Nuevo problema reportado por {current_user.email}"
+    subject = f"⚠️ [VerdictIQ Bug Report] Nuevo problema reportado por {current_user.email}"
     body = (
-        f"Se ha recibido un nuevo reporte de error en DealScout AI:\n\n"
+        f"Se ha recibido un nuevo reporte de error en VerdictIQ:\n\n"
         f"Usuario: {current_user.email}\n"
         f"URL/Pantalla: {url or 'No provista'}\n"
         f"Descripción:\n{description}\n\n"
@@ -581,13 +595,13 @@ def get_public_branding(db: Session = Depends(get_db)):
     Returns public branding variables for the frontend landing and login screens.
     """
     return {
-        "platform_name": get_config(db, "platform_name") or "DealScout AI",
+        "platform_name": get_config(db, "platform_name") or "VerdictIQ",
         "theme_color": get_config(db, "theme_color") or "dark",
         "logo_url": get_config(db, "logo_url") or "",
-        "welcome_message": get_config(db, "welcome_message") or "Bienvenido a DealScout AI",
+        "welcome_message": get_config(db, "welcome_message") or "Bienvenido a VerdictIQ",
         "analysis_loading_message": get_config(db, "analysis_loading_message") or "Analizando la startup, por favor espera...",
         "analysis_complete_message": get_config(db, "analysis_complete_message") or "¡Análisis completado con éxito!",
-        "footer_message": get_config(db, "footer_message") or "DealScout AI - Venture Capital Due Diligence"
+        "footer_message": get_config(db, "footer_message") or "VerdictIQ - Venture Capital Due Diligence"
     }
 
 # ----------------- SETTINGS & WHITE-LABEL ENDPOINTS -----------------
@@ -1234,7 +1248,7 @@ def get_pdf_report(domain: str, current_user: User = Depends(get_current_user), 
     if not pdf_path or not os.path.exists(pdf_path):
         # Regenerate PDF on the fly if file is missing
         org = db.query(Organization).filter_by(id=current_user.organization_id).first()
-        org_name = org.company_name if org else "DealScout Capital"
+        org_name = org.company_name if org else "VerdictIQ Capital"
         logo_path = org.logo_path if org else None
 
         report_data_dict = {
@@ -1847,16 +1861,16 @@ def express_interest_on_listing(id: int, current_user: User = Depends(get_curren
 
     # SMTP Alert Notification (Notify the founder with details of who showed interest)
     founder = listing.user
-    subject = f"🔥 [DealScout AI] Un inversionista se ha interesado en {listing.visible_name}!"
+    subject = f"🔥 [VerdictIQ] Un inversionista se ha interesado en {listing.visible_name}!"
     body = (
         f"Hola {founder.email},\n\n"
-        f"¡Grandes noticias! Un inversionista ha manifestado interés en tu empresa '{listing.visible_name}' a través de DealScout AI.\n\n"
+        f"¡Grandes noticias! Un inversionista ha manifestado interés en tu empresa '{listing.visible_name}' a través de VerdictIQ.\n\n"
         f"Detalles del inversionista:\n"
         f"- Nombre / Organización: {current_user.company_name or 'Inversionista Independiente'}\n"
         f"- Correo de contacto: {current_user.email}\n\n"
         f"Ahora puedes decidir si deseas ponerte en contacto directamente con ellos respondiendo a este correo.\n\n"
         f"Atentamente,\n"
-        f"El equipo de DealScout AI"
+        f"El equipo de VerdictIQ"
     )
 
     try:
@@ -2424,7 +2438,7 @@ def create_checkout_session(plan_id: int, req: CheckoutRequest, current_user: Us
                 }
                 payload = {
                     "name": plan.name,
-                    "description": f"DealScout AI Purchase - {plan.name}",
+                    "description": f"VerdictIQ Purchase - {plan.name}",
                     "pricing_type": "fixed_price",
                     "local_price": {
                         "amount": str(amount_decimal),
