@@ -5,7 +5,7 @@ CONFIG_REGISTRY = {
     "platform_name": {
         "value_type": "string",
         "category": "branding",
-        "default": "DealScout AI",
+        "default": "VerdictIQ",
         "description": "Nombre de la plataforma"
     },
     "theme_color": {
@@ -23,7 +23,7 @@ CONFIG_REGISTRY = {
     "welcome_message": {
         "value_type": "string",
         "category": "branding",
-        "default": "Bienvenido a DealScout AI",
+        "default": "Bienvenido a VerdictIQ",
         "description": "Mensaje de bienvenida en el login/landing"
     },
     "analysis_loading_message": {
@@ -41,7 +41,7 @@ CONFIG_REGISTRY = {
     "footer_message": {
         "value_type": "string",
         "category": "branding",
-        "default": "DealScout AI - Venture Capital Due Diligence",
+        "default": "VerdictIQ - Venture Capital Due Diligence",
         "description": "Mensaje del pie de página"
     },
     # llm_budget
