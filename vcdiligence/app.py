@@ -1199,7 +1199,8 @@ def get_status(task_id: str, current_user: User = Depends(get_current_user), db:
         "progress": task.progress,
         "message": task.message,
         "result": task.result_json,
-        "partial_sections": task.partial_sections
+        "partial_sections": task.partial_sections,
+        "hype_qa": task.hype_qa
     }
 
 # ----------------- REPORTS & MANAGEMENT ENDPOINTS -----------------

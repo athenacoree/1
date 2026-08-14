@@ -2038,6 +2038,11 @@
                                         :class="activeTab === 'omissions' ? 'border-cyan-500 text-cyan-400 bg-slate-900/20' : 'border-transparent text-slate-400 hover:text-slate-100'">
                                         Señales por Ausencia
                                     </button>
+                                    <button @click="activeTab = 'hype_qa'"
+                                        class="px-6 py-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all whitespace-nowrap outline-none"
+                                        :class="activeTab === 'hype_qa' ? 'border-cyan-500 text-cyan-400 bg-slate-900/20' : 'border-transparent text-slate-400 hover:text-slate-100'">
+                                        Auditoría de Hype y Q&A
+                                    </button>
                                 </div>
 
                                 <div class="p-6 bg-slate-950/20 rounded-b-xl border border-t-0 border-slate-800/40">
@@ -2074,6 +2079,111 @@
                                             <strong>Note:</strong> Omissions are signals to investigate further during direct calls with the founders, not definitive negative conclusions.
                                         </div>
                                         <div class="text-slate-300 text-sm whitespace-pre-wrap select-text" x-text="resultData ? parseOmissionSection(resultData.report_md) : ''"></div>
+                                    </div>
+
+                                    <div x-show="activeTab === 'hype_qa'" class="space-y-6">
+                                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                            <!-- Hype Score Card -->
+                                            <div class="md:col-span-1 glass p-6 rounded-2xl border border-slate-800 flex flex-col items-center justify-center text-center">
+                                                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Hype Score</h4>
+
+                                                <div class="relative w-36 h-36 flex items-center justify-center">
+                                                    <!-- Circular gauge style -->
+                                                    <svg class="absolute inset-0 w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                                                        <circle cx="50" cy="50" r="40" stroke="#1e293b" stroke-width="8" fill="none" />
+                                                        <circle cx="50" cy="50" r="40" stroke="url(#hypeGrad)" stroke-width="8" fill="none"
+                                                                stroke-linecap="round"
+                                                                :stroke-dasharray="251.2"
+                                                                :stroke-dashoffset="251.2 - (251.2 * (resultData?.hype_qa?.hype_score || 0)) / 100" />
+                                                        <defs>
+                                                            <linearGradient id="hypeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                                <stop offset="0%" style="stop-color:#3b82f6" />
+                                                                <stop offset="50%" style="stop-color:#10b981" />
+                                                                <stop offset="100%" style="stop-color:#ef4444" />
+                                                            </linearGradient>
+                                                        </defs>
+                                                    </svg>
+                                                    <div class="text-center">
+                                                        <span class="text-4xl font-extrabold tracking-tighter text-white" x-text="resultData?.hype_qa?.hype_score || 0"></span>
+                                                        <span class="text-slate-400 text-sm font-bold">%</span>
+                                                    </div>
+                                                </div>
+
+                                                <div class="mt-4">
+                                                    <span class="px-3 py-1 rounded-full text-xs font-bold uppercase"
+                                                          :class="(resultData?.hype_qa?.hype_score || 0) >= 70 ? 'bg-red-500/15 text-red-400' : ((resultData?.hype_qa?.hype_score || 0) >= 40 ? 'bg-yellow-500/15 text-yellow-400' : 'bg-emerald-500/15 text-emerald-400')"
+                                                          x-text="(resultData?.hype_qa?.hype_score || 0) >= 70 ? 'Alto Hype / Humo' : ((resultData?.hype_qa?.hype_score || 0) >= 40 ? 'Hype Moderado' : 'Bajo en Clichés (BS-Free)')">
+                                                    </span>
+                                                </div>
+
+                                                <p class="text-slate-400 text-[11px] mt-4 leading-relaxed">
+                                                    Este indicador audita la densidad de clichés publicitarios y palabras trilladas en el contenido de la startup.
+                                                </p>
+                                            </div>
+
+                                            <!-- Clichés Detectados Card -->
+                                            <div class="md:col-span-2 glass p-6 rounded-2xl border border-slate-800">
+                                                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Clichés y Exageraciones Detectadas</h4>
+
+                                                <div class="space-y-4 max-h-[320px] overflow-y-auto pr-2">
+                                                    <template x-if="!resultData?.hype_qa?.detected_cliches || resultData.hype_qa.detected_cliches.length === 0">
+                                                        <div class="text-center py-8 text-slate-500 text-xs">
+                                                            🎉 ¡Excelente! No se detectaron clichés o palabras de marketing vacías en el texto analizado.
+                                                        </div>
+                                                    </template>
+
+                                                    <template x-for="cliche in (resultData?.hype_qa?.detected_cliches || [])">
+                                                        <div class="p-4 rounded-xl border border-slate-800/80 bg-slate-900/10 flex flex-col gap-2">
+                                                            <div class="flex justify-between items-center">
+                                                                <span class="text-sm font-extrabold text-white" x-text="cliche.word"></span>
+                                                                <div class="flex items-center gap-2">
+                                                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase"
+                                                                          :class="cliche.severity === 'high' ? 'bg-red-500/10 text-red-400' : (cliche.severity === 'medium' ? 'bg-yellow-500/10 text-yellow-400' : 'bg-blue-500/10 text-blue-400')"
+                                                                          x-text="cliche.severity">
+                                                                    </span>
+                                                                    <span class="text-xs text-slate-400 font-bold" x-text="'x' + cliche.count"></span>
+                                                                </div>
+                                                            </div>
+                                                            <p class="text-xs text-slate-300 leading-relaxed" x-text="cliche.explanation"></p>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Investment Committee Simulator Card -->
+                                        <div class="glass p-6 rounded-2xl border border-slate-800">
+                                            <div class="flex items-center gap-2 mb-4">
+                                                <span class="text-xl">💼</span>
+                                                <div>
+                                                    <h4 class="text-sm font-bold text-white uppercase tracking-wide">Simulador de Preguntas de Comité de Inversión</h4>
+                                                    <p class="text-slate-400 text-[11px] leading-relaxed">
+                                                        Preguntas incómodas y estratégicas que tu equipo o socios deberían hacerle a los fundadores en reuniones directas.
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <div class="space-y-4">
+                                                <template x-for="(item, index) in (resultData?.hype_qa?.simulated_questions || [])" :key="index">
+                                                    <div class="rounded-xl border border-slate-800/80 bg-slate-900/5 overflow-hidden" x-data="{ open: false }">
+                                                        <!-- Header / Question -->
+                                                        <div @click="open = !open" class="p-4 bg-slate-900/40 hover:bg-slate-900/60 cursor-pointer flex justify-between items-center gap-4 transition-all">
+                                                            <div class="flex items-start gap-3">
+                                                                <span class="text-cyan-400 font-bold text-sm" x-text="'Q' + (index + 1)"></span>
+                                                                <span class="text-sm font-semibold text-slate-100" x-text="item.question"></span>
+                                                            </div>
+                                                            <span class="text-xs text-slate-500 font-bold transition-transform" :class="open ? 'rotate-180' : ''">▼</span>
+                                                        </div>
+
+                                                        <!-- Content / Suggested Answer -->
+                                                        <div x-show="open" class="p-4 border-t border-slate-800 bg-slate-950/20 text-xs text-slate-300 leading-relaxed" x-transition>
+                                                            <div class="font-bold text-[10px] text-emerald-400 uppercase tracking-wider mb-2">Guía de Auditoría para el VC / Inversor:</div>
+                                                            <p x-text="item.answer"></p>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
