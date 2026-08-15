@@ -2,63 +2,45 @@
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/athenacoree/1)
 
-sitio: 
-https://verdictiq.onrender.com/
-**VerdictIQ** (configurado internamente como `VCDueDiligenceAgent`) es una plataforma autónoma de auditoría (*due diligence*) y directorio bidireccional de inversión para startups y firmas de Venture Capital de nivel empresarial. Construida con **FastAPI**, **SQLAlchemy** y **CrewAI**, permite evaluar de forma profunda startups a partir de URLs públicas, presentaciones Pitch Deck (PDF/PPTX) o perfiles de LinkedIn, resolviendo la necesidad de análisis preliminares de alta fidelidad sin incurrir en procesos manuales lentos.
+**Sitio Oficial en Producción:** [https://verdictiq.onrender.com/](https://verdictiq.onrender.com/)
+
+**VerdictIQ** (conocido en la arquitectura interna como `VCDueDiligenceAgent`) es la plataforma autónoma líder de auditoría de inversión (*due diligence*) y directorio bidireccional para startups, firmas de Venture Capital, inversores ángeles y syndicates de nivel empresarial.
+
+Desarrollada con **FastAPI**, **SQLAlchemy**, **CrewAI** y **Alpine.js/Tailwind CSS**, VerdictIQ transforma radicalmente la evaluación de startups a partir de URLs públicas, presentaciones Pitch Deck (PDF/PPTX) o perfiles de LinkedIn. Resuelve de manera inteligente el análisis preliminar de alta fidelidad, eliminando procesos manuales lentos, reduciendo costes y entregando memorandos de inversión profesionales en tiempo real.
 
 ---
 
-## ⚡ ¿Qué hace diferente a VerdictIQ?
+## 🚀 ¿Por qué elegir VerdictIQ? (Ventajas Competitivas y Valor)
 
-VerdictIQ no es un "simple wrapper" o intermediario superficial de APIs de Inteligencia Artificial. Está diseñado bajo rigurosos patrones de ingeniería de software e infraestructura distribuida:
+VerdictIQ no es un wrapper superficial ni un simple generador de texto. Es un motor de inteligencia financiera de grado institucional diseñado bajo patrones de ingeniería distribuidos y robustos:
 
-1. **Pipeline Cognitivo Multi-Agente con Debate Adversarial (7 Agentes)**
-   En lugar de una sola llamada masiva a un LLM, VerdictIQ coordina un equipo de 7 agentes especializados de **CrewAI** que actúan como un comité real de analistas de inversión. Los primeros 5 analistas especialistas (Market Research, Competitive Intelligence, Customer Insights, Product Strategy, y Omission Analyst) investigan y extraen hallazgos estructurados. Luego, el **Business Analyst** compila el reporte final, el cual es sometido al riguroso análisis adversarial del agente **Devil's Advocate** (Abogado del Diablo), encargado de cuestionar críticamente las tesis positivas de inversión, aportando un debate de nivel profesional inusual en sistemas automatizados.
+### 1. Comité Virtual de Inversión (7 Agentes Especializados con Debate Adversarial)
+En lugar de una respuesta plana de IA, VerdictIQ simula un comité de inversión real operado por 7 agentes autónomos de **CrewAI**:
+- **Market Research Specialist:** Analiza el tamaño de mercado (TAM/SAM/SOM), tendencias y vientos a favor (*tailwinds*).
+- **Competitive Intelligence Analyst:** Evalúa el panorama competitivo, barreras de entrada y ventajas defensivas (*moats*).
+- **Customer Insights Researcher:** Audita las reseñas de clientes, retención de cohortes y propuesta de valor.
+- **Product Strategy Advisor:** Examina la arquitectura del producto, la escalabilidad técnica y el modelo de monetización.
+- **Omission Analyst:** Detecta señales por ausencia, inconsistencias en los datos y riesgos no declarados.
+- **Business Analyst:** Sintetiza los hallazgos atómicos en un memorando estructurado con recomendación (*GO*, *CONDITIONAL*, o *NO-GO*).
+- **Devil's Advocate (Abogado del Diablo):** Aplica un debate crítico y adversarial para cuestionar rigurosamente la tesis positiva, garantizando un análisis objetivo y libre de sesgos.
 
-2. **Lógica de "Hallazgos Estructurados" de Bajo Consumo**
-   Para optimizar costes y evitar la "alucinación" y verbosidad innecesaria de la IA, los agentes especialistas no se pasan prosa larga entre sí. Cada uno genera y transmite un esquema **Pydantic** compacto (`AgentFinding`) con datos atómicos altamente condensados. Únicamente el agente de síntesis final redacta la prosa en formato de memorando humano. Esto reduce drásticamente el consumo de tokens de contexto y maximiza la precisión analítica.
+### 2. Eficiencia Cognitiva y "Hallazgos Estructurados" de Bajo Consumo
+Para garantizar máxima velocidad y optimizar cuotas, los agentes especialistas intercambian esquemas **Pydantic** compactos (`AgentFinding`) con datos atómicos altamente condensados. Únicamente la fase de síntesis redacta la prosa final en formato de memorando técnico humano. Esto reduce drásticamente el consumo de tokens y maximiza la precisión analítica.
 
-3. **Orquestación Concurrente e Inteligente de 12 Fuentes de Datos**
-   El sistema integra un orquestador multi-fuente (`source_orchestrator.py`) que gestiona consultas en paralelo (con un pool de hilos) a bases de datos de producción reales. El orquestador divide las fuentes en *necesarias* y *condicionales*. Basándose en heurísticas de dominio del startup y lo que se va descubriendo, el motor decide inteligentemente cuáles de las 12 fuentes consultar (SEC EDGAR Form D, patentes de la USPTO, litigios en CourtListener, registros de OpenCorporates, estado de sanciones de la OFAC SDN con fuzzy matching, GitHub, WHOIS, etc.), ahorrando recursos de red y cuotas de API.
+### 3. Orquestador Concurrente de 12 Fuentes de Datos de Producción
+Mediante su orquestador de fuentes (`source_orchestrator.py`), VerdictIQ consulta en paralelo bases de datos oficiales y públicas (SEC EDGAR Form D, patentes USPTO, litigios en CourtListener, registros globales de OpenCorporates, lista de sanciones OFAC SDN con *fuzzy matching*, GitHub, WHOIS, GDELT, CFPB, etc.), seleccionando dinámicamente qué fuentes consultar según la startup.
 
-4. **Resiliencia de Infraestructura Empresarial**
-   VerdictIQ incorpora un sistema avanzado de **circuit breaker** en memoria que pausa automáticamente las consultas a fuentes externas caídas o con timeouts para evitar demoras, un **Pool de API Keys con Rotación Automática (`ApiKeyPool`)** que detecta y aísla llaves con fallos consecutivos de cuotas (*rate limits*), y mitigaciones estrictas contra ataques **SSRF** para asegurar que el motor de scraping no sea utilizado de manera maliciosa.
+### 4. Auditoría de Hype, Clichés y Simulador IC Q&A
+Audita la densidad de palabras vacías o exageraciones de marketing (*hype audit*) y calcula un índice % de clichés. Además, genera preguntas incómodas y estratégicas que los socios del fondo deben realizar a los fundadores en reuniones directas.
 
-5. **Despliegue Transparente y 100% Reproducible**
-   Con la integración de Render Blueprints, puedes desplegar tu propio VerdictIQ totalmente funcional con un solo clic, demostrando que es un sistema transparente, desacoplado y listo para ambientes de producción reales.
-
----
-
-## 🚀 Despliegue en un Clic (Render Blueprint)
-
-Puedes desplegar una copia completa de VerdictIQ y su base de datos relacional PostgreSQL de forma instantánea en la nube de Render usando el botón superior o el siguiente enlace:
-
-**[Desplegar en Render](https://render.com/deploy?repo=https://github.com/athenacoree/1)**
-
-### Variables de Entorno en el Formulario de Despliegue
-
-Al hacer clic en el botón de despliegue, el formulario de Render te solicitará completar las siguientes variables:
-
-#### 🔴 Obligatorias (Para que el sistema arranque con éxito):
-- `JWT_SECRET`: Una cadena de texto segura para firmar y verificar tokens de autenticación JWT. La aplicación fallará explícitamente en el inicio si se deja en blanco.
-- `ADMIN_BOOTSTRAP_PASSWORD`: Contraseña para inicializar el usuario administrador predeterminado (`admin@verdictiq.ai`).
-- `API_KEY_OPENROUTER`: Tu API Key de OpenRouter (u otro LLM admitido como OpenAI o Grok) para alimentar las llamadas cognitivas de los agentes de IA.
-
-#### 🟢 Opcionales (Configurables para extender funcionalidades):
-Si dejas estas variables en blanco, el sistema operará con un **esquema de degradación con gracia**, desactivando la fuente correspondiente de manera segura o utilizando simulaciones seguras sin provocar fallos en el sistema:
-- `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET`: Activa y procesa cobros reales de tarjetas de crédito para el sistema de compra de créditos de análisis de startups. Si falta, la pasarela opera en modo de prueba (*Mock*).
-- `CRYPTO_API_KEY` / `CRYPTO_WEBHOOK_SECRET`: Activa cobros automatizados con criptomonedas (Coinbase Commerce o NOWPayments). Si falta, opera en modo simulado seguro.
-- `BACKUP_S3_ENDPOINT` / `ACCESS_KEY` / `SECRET_KEY` / `BUCKET`: Permite subir y respaldar los logos corporativos y capturas de marca blanca a buckets S3. Si falta, el sistema utiliza codificación Base64 en la base de datos de forma local.
-- `COMPANIES_HOUSE_API_KEY`: Habilita la consulta de registros de empresas oficiales del gobierno del Reino Unido. Si falta, se omite esa fuente de datos de manera silenciosa.
-- `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD`: Habilita el envío automático de PDFs firmados, notificaciones de expiración y alertas de interés de inversores a los fundadores. Si falta, las alertas se registran únicamente en los logs del servidor.
+### 5. Exportación White-Label en PDF y Sincronización Directa con Notion
+Genera memorandos descargables en formato PDF con la marca corporativa de la firma (*white-label*) mediante **ReportLab**, incluyendo capturas de pantalla de la startup y enlaces interactivos. Además, permite exportar cualquier reporte directamente a una base de datos de **Notion** configurada con un solo clic.
 
 ---
 
 ## 📊 Diagramas de Flujo del Sistema
 
-### 1. Pipeline Cognitivo Multi-Agente (7 Agentes)
-El siguiente diagrama detalla cómo los 5 agentes especialistas analizan de manera secuencial y estructurada la información de la startup devolviendo esquemas Pydantic `AgentFinding`, y cómo confluyen en el Business Analyst y el Devil's Advocate para generar el veredicto final:
-
+### Pipeline Cognitivo Multi-Agente (7 Agentes)
 ```mermaid
 graph TD
     A[Inicio del Crew] --> B[Market Research Specialist<br/>'AgentFinding' estructurado]
@@ -67,7 +49,7 @@ graph TD
     D --> E[Product Strategy Advisor<br/>'AgentFinding' estructurado]
     E --> F[Omission Analyst<br/>'AgentFinding' estructurado]
 
-    F --> G[Business Analyst<br/>Sintetiza hallazgos en prosa completa/memo]
+    F --> G[Business Analyst<br/>Sintetiza hallazgos en formato memo]
     G --> H[Devil's Advocate<br/>Debate/Contraargumenta resultado final]
     H --> I[Memo de Inversión Final Combinado]
 
@@ -81,15 +63,13 @@ graph TD
     style I fill:#020617,stroke:#e2e8f0,stroke-width:3px,color:#fff
 ```
 
-### 2. Flujo del Ciclo de Vida de una Petición de Análisis
-Este diagrama de secuencia ilustra el flujo de extremo a extremo que experimenta una solicitud de análisis iniciada por un usuario:
-
+### Flujo de Ejecución de Análisis y Búsqueda Concurrente
 ```mermaid
 graph TD
-    User([Usuario envía URL / Pitch Deck]) --> Scraper[SmartScraper<br/>Extrae contenido web/PDF/PPTX]
+    User([Usuario envía URL / Pitch Deck / LinkedIn]) --> Scraper[SmartScraper<br/>Extrae contenido web/PDF/PPTX]
     Scraper --> Orch[Source Orchestrator<br/>Consulta fuentes concurrentemente con ThreadPool]
     Orch --> SEC[SEC EDGAR Form D]
-    Orch --> Court[CourtListener]
+    Orch --> Court[CourtListener Litigios]
     Orch --> USPTO[Patentes USPTO]
     Orch --> GH[GitHub API]
     Orch --> OFAC[Fuzzy Sanctions OFAC]
@@ -98,149 +78,71 @@ graph TD
     MergeCtx --> Crew[Orquestador de Agentes CrewAI]
     Crew --> GenPDF[Generador PDF White-Label<br/>pdf_generator.py]
     GenPDF --> Notify[Notificaciones SMTP / Alerta Admin WhatsApp]
-    Notify --> Finished([Reporte Listo en Dashboard])
+    Notify --> Finished([Reporte Listo en Dashboard Web])
 ```
 
 ---
 
-## 🛠 Directory and Account Types ("Buyer vs Founder")
+## 🛠 Directores y Tipos de Cuentas
 
-El sistema separa las cuentas e interacciones en dos flujos completamente aislados:
-
-### 1. Tipos de Cuentas
-- **Personal / Investor Accounts:** Diseñado para analistas de VC, ángeles y compradores independientes. Tienen acceso total para iniciar análisis de cualquier startup, comparar múltiples memos, registrar y calibrar sus decisiones de inversión basadas en scores personalizados, y expresar interés en startups del directorio.
-- **Empresa / Founder Accounts:** Diseñado para fundadores y ejecutivos de startups. Tienen acceso al análisis enfocado en su propia empresa, la opción de publicarse en el directorio público y renovar la expiración de sus publicaciones.
-- **Verificación de Dominio:** Si un fundador se registra con un correo corporativo que coincide con el dominio oficial de su startup (ej. `founder@stripe.com` para `stripe.com`), su cuenta es automáticamente marcada como `verified_domain = true`.
-
-### 2. Directorio Bidireccional y Contacto Seguro ("Me interesa")
-- **Consentimiento de Publicación (Opt-In):** Ninguna startup analizada se publica automáticamente. Los fundadores deben configurar explícitamente sus parámetros de listado (categoría, descripción de visibilidad, y decidir si mostrar su score numérico exacto o una insignia cualitativa de rendimiento).
-- **Moderación:** Las solicitudes se guardan como `pending_review` y requieren aprobación manual de un administrador para ser visibles públicamente.
-- **Lead Generation Seguro:** El correo directo del fundador permanece oculto para evitar spam. Cuando un inversor autenticado hace clic en **"Me interesa"**, el sistema registra la solicitud en `ListingInterest` y despacha un correo de alerta SMTP seguro directamente al fundador con los datos del inversionista interesado.
-- **Expiración de Listados:** Los anuncios expiran de manera automática a los 60 días. El sistema envía notificaciones previas por correo con un enlace seguro de renovación rápida de un solo clic.
+- **Cuentas Inversor / Personal:** Acceso completo para iniciar análisis ilimitados, comparar memos de portafolio lado a lado, calibrar métricas de decisión y contactar fundadores en el directorio.
+- **Cuentas Empresa / Fundadores:** Acceso dedicado para analizar su propia empresa, subir Pitch Decks, verificar dominio de empresa y publicar su perfil en el directorio de inversión con aprobación de moderación.
+- **Directorio de Inversión Abierto:** Un espacio de descubrimiento seguro donde los fundadores pueden exponer su startup a inversores verificados sin compartir correos de manera pública, gestionando alertas de interés (*"Me interesa"*) directamente por correo electrónico.
 
 ---
 
-## 🖥️ Interfaz de Usuario (Descripción de Pantallas)
+## ⚡ 10 Herramientas Financieras e Interactivas Integradas
 
-Dado que no es posible desplegar recursos estáticos en vivo durante la compilación del repo, a continuación se describe brevemente la experiencia visual y estructural de cada pantalla principal del sistema:
-
-1. **Pantalla de Login / Registro:** Presenta una interfaz oscura elegante con el mensaje de bienvenida dinámico configurado por el administrador (`welcome_message`), campos para ingresar correo y contraseña, y una opción rápida para registrarse como inversor (personal) o fundador (empresa) con código de invitación/referido si posee.
-2. **Dashboard de Análisis (Founder / Investor):**
-   - **Para Inversionistas:** Permite buscar startups ingresando el nombre de la compañía, URL directa o LinkedIn. Muestra una lista de análisis completados con su Readiness Score, recomendación de inversión (GO/CONDITIONAL/NO-GO), botones para descargar el reporte PDF, realizar comparación múltiple, y activar monitoreo continuo.
-   - **Para Fundadores:** Permite ver los resultados de su propio análisis, configurar su listado público en el directorio de inversión, subir su Pitch Deck o actualizar su perfil de empresa con dominio verificado.
-3. **Panel Administrativo (Admin Console):** Secciones dedicadas para que los administradores editen las variables del sistema (`SystemConfig`) en tiempo real (por ejemplo, presupuestos de tokens o switch de pasarela de pagos), ver el estado detallado de las llaves del pool (`api_key_pools`) y sus consecutivas fallas de conexión, moderar testimonios con capturas, examinar logs de errores, y verificar manualmente cuentas de empresas (`verified_by_admin = true`).
+VerdictIQ incluye una suite de calculadoras e instrumental financiero para VC e Inversores:
+1. **🔥 Calculadora de Runway & Burn Rate:** Proyecta la cantidad de meses de vida financiera restante según caja, burn rate e ingresos recurrentes (MRR).
+2. **📊 Valoración EV / ARR:** Estima el valor de empresa (*Enterprise Value*) aplicando múltiplos por sector (SaaS, FinTech, DeepTech, E-Commerce).
+3. **🚀 Simulador MoIC / IRR:** Calcula retornos brutos y múltiplos de inversión en escenarios de salida M&A.
+4. **📝 Cuestionario para Comité de Inversión (IC):** Guía de preguntas estratégicas para reuniones directas con fundadores.
+5. **🌐 Estimador TAM / SAM / SOM:** Calcula mercados atendibles e insumos de captura comercial.
+6. **📜 Check Auditoría Term Sheet:** Revisa cláusulas clave (*liquidation preference*, *drag-along*, anti-dilución).
+7. **👥 Calculadora Pool ESOP:** Diseña reservas de opciones sobre acciones para empleados clave.
+8. **📈 Unit Economics (CAC vs LTV):** Evalúa el valor de vida del cliente frente al costo de adquisición.
+9. **🎙️ Script Briefing Audio Builder:** Sintetiza guiones de audio de 60 segundos para revisión previa a comités.
+10. **🛡️ Quiz ESG & Cumplimiento:** Audita políticas GDPR, gobernanza de IA y diversidad.
 
 ---
 
-## ⚙️ Configuración y Variables de Entorno de Desarrollo (.env)
+## ⚙️ Configuración y Variables de Entorno (.env)
 
-A diferencia de los ajustes de diseño configurables desde el Panel de Admin, estas claves de bajo nivel son requeridas en la inicialización:
-
-| Variable | Descripción | Default / Opción |
+| Variable | Descripción | Valor Predeterminado / Nota |
 |---|---|---|
-| `DATABASE_URL` | String de conexión relacional | `sqlite:///vcdiligence.db` |
-| `JWT_SECRET` | Clave secreta para firma de tokens JWT (Mandatorio, la app falla si está vacío) | Debe configurarse |
-| `ENV` | Modo de entorno del servidor | `development` \| `production` |
-| `MIN_USERS_TO_SHOW_STATS` | Límite mínimo de usuarios para visualizar estadísticas de landing | `20` |
-| `LISTING_EXPIRY_DAYS` | Vigencia de un listado de inversión pública antes de expirar | `60` |
-| `SMTP_HOST` / `SMTP_PORT` | Configuración del servidor de alertas SMTP | `smtp.gmail.com` \| `587` |
-| `SMTP_USERNAME` / `SMTP_PASSWORD` | Credenciales de correo de alertas | Opcional |
+| `DATABASE_URL` | String de conexión a base de datos relacional | `sqlite:///vcdiligence.db` |
+| `JWT_SECRET` | Clave secreta para firmar tokens de autenticación JWT | Mandatorio |
+| `API_KEY_OPENROUTER` | API Key de OpenRouter, OpenAI o Grok para los LLMs | Requerido para análisis de IA |
+| `NOTION_API_KEY` / `NOTION_DATABASE_ID` | Credenciales para integración directa con Notion | Opcional |
+| `SMTP_HOST` / `SMTP_PORT` | Configuración del servidor para envío de notificaciones | Opcional |
 
 ---
 
-## 🧩 Directory Map and Repository Layout
+## 🚀 Instalación y Despliegue de Desarrollo
 
-- `vcdiligence/app.py`: Aplicación FastAPI principal que administra los endpoints REST, políticas de autenticación, moderación, carga de Pitch Decks, webhooks de pagos (Stripe, Crypto) y renderizado de plantillas HTML.
-- `vcdiligence/database.py`: Definiciones SQLAlchemy de todas las tablas e índices del sistema. Gestiona la inicialización segura e inyección programática de migraciones Alembic.
-- `vcdiligence/system_config.py`: Definición de CONFIG_REGISTRY de configuración dinámica. Métodos seguros para leer (`get_config`) y escribir (`set_config`) valores tipados y validados.
-- `vcdiligence/agent_schemas.py`: Contiene el esquema Pydantic estructurado de `AgentFinding` utilizado para restringir el formato de salida JSON de los agentes analistas.
-- `vcdiligence/crew.py`: Implementación del pipeline cognitivo CrewAI. Controla los callbacks de registro de consumo de tokens y el loop inteligente de rotación `run_crew_with_rotation()`.
-- `vcdiligence/scraper.py`: Adaptador inteligente `SmartScraper` encargado de extraer texto de portales, PDFs de Pitch Decks, presentaciones PPTX y perfiles de LinkedIn.
-- `vcdiligence/public_apis.py`: Integración de conectores externos (SEC EDGAR, CourtListener, USPTO, GitHub API) y caché de consultas.
-- `vcdiligence/pdf_generator.py`: Generador ReportLab que maquilla el memo técnico final de prosa e incluye branding white-label en el archivo descargable.
-- `vcdiligence/tasks.py`: Módulo que consume las tareas asíncronas en segundo plano por medio de FastAPI BackgroundTasks.
-- `vcdiligence/monitoring.py`: Worker recurrente de APScheduler que corre análisis de cambios recurrentes, actualiza el estatus de las llaves bloqueadas del pool y expira publicaciones antiguas.
-- `vcdiligence/validator.py`: Capa de seguridad que audita SSRF y deniega conexiones a rangos privados/locales de IP.
-
----
-
-## 🛠 Quick Start & Instalación de Desarrollo
-
-### 1. Clonar el Repositorio e Instalar Dependencias
-Asegúrate de contar con Python y Poetry instalado en tu máquina de desarrollo:
 ```bash
+# 1. Clonar el repositorio
 git clone https://github.com/athenacoree/1.git VerdictIQ
 cd VerdictIQ
+
+# 2. Instalar dependencias con Poetry y navegadores de Playwright
 poetry install
 poetry run playwright install chromium
-```
 
-### 2. Configurar el Archivo de Entorno
-Copia la plantilla y configura tu secreto y llaves API correspondientes:
-```bash
+# 3. Configurar archivo de entorno
 cp .env.example .env
-```
-*(Asegúrate de asignar una clave fuerte en `JWT_SECRET` para evitar que la aplicación falle en el arranque)*
 
-### 3. Ejecutar las Migraciones Iniciales de Alembic
-El sistema aplicará automáticamente todas las tablas al iniciar la aplicación, pero también puedes ejecutarlas o comprobarlas manualmente mediante:
-```bash
-poetry run alembic upgrade head
-```
-
-### 4. Alimentar Datos de Prueba (Seeding)
-Inserta datos iniciales de prueba (usuarios analistas, administradores, configuraciones del CONFIG_REGISTRY y claves API mock):
-```bash
-poetry run python -m vcdiligence.seed
-```
-
-### 5. Iniciar la Aplicación
-```bash
+# 4. Iniciar la aplicación
 poetry run python -m vcdiligence.app
 ```
-La aplicación estará disponible en `http://localhost:10000`.
-
-- **Analista de Prueba:** `analyst@verdictiq.ai` / `analystpassword`
-- **Administrador de Prueba:** `admin@verdictiq.ai` / `adminpassword`
+La aplicación iniciará en `http://localhost:10000`.
 
 ---
 
-## 🧪 Pruebas Unitarias e Integración
+## 📄 Licencia y Derechos de Autor
 
-Para ejecutar la batería completa de pruebas automatizadas y asegurar que no existan regresiones de base de datos o lógica:
-```bash
-poetry run python -m unittest discover -s tests
-```
+**VerdictIQ** está protegido bajo las leyes de propiedad intelectual y licencias correspondientes.
 
----
-
-## 🌟 Últimas Mejoras e Integraciones (Actualización 2026)
-
-VerdictIQ se ha robustecido con una serie de características avanzadas de última generación:
-
-### 1. Fuentes estructuradas por sección (Parte 1)
-En lugar de amontonar todas las referencias al final del documento, ahora las fuentes de información de mercado, competencia, producto y legales se atribuyen de manera ultra-localizada. Al final de cada subsección relevante del Deep Dive, se renderiza un bloque de citas exacto en formato markdown interactivo:
-`**Fuentes de esta sección:** [Nombre de fuente](url) (consultado DD-MM-YYYY)`. Además, las citas son totalmente clickables y funcionales en los documentos PDFs exportados de ReportLab.
-
-### 2. Eliminación de genericidad y duplicidades (Parte 2)
-Se ha implementado una rigurosa restricción cognitiva contra términos vagos como *"riesgos regulatorios"* o *"intensa competencia"* sin un sustento concreto (nombre de competidor, cifra o cita textual). El memo técnico se complementa con reglas estrictas de no-repetición de conceptos y profundización por ángulos distintivos (financiero, operativo, etc.).
-
-### 3. Investigación real de fundadores y equipo sin fotos (Parte 3)
-El motor de scraping de LinkedIn y DuckDuckGo extrae de forma estructurada los nombres, cargos y URLs de perfil de LinkedIn de los fundadores y equipo directivo de la startup, sin almacenar fotos para mantener la ligereza y cumplimiento de la privacidad, sustituyendo los placeholders genéricos de "falta de información del equipo" por un organigrama real y verificable.
-
-### 4. Capturas de pantalla ligeras y eficientes (Parte 4)
-Para no ralentizar ni agotar los recursos del servidor con pesados navegadores headless o procesos de Puppeteer/Playwright que consumen toda la memoria RAM, se ha integrado la API gratuita externa de **Microlink.io**. Esta captura exactamente 4 capturas clave de fuentes diferentes por análisis y las almacena en la nueva tabla `ScreenshotCache` de la base de datos (con validez de 30 días para evitar llamadas redundantes), renderizándolas como una elegante galería de miniaturas tanto en el PDF final como en el Dashboard de resultados web.
-
-### 5. Integración directa con Notion (Parte 5)
-Permite exportar al instante los resultados de cualquier reporte directamente como una página estructurada dentro de la base de datos de Notion configurada mediante las variables de entorno `NOTION_API_KEY` y `NOTION_DATABASE_ID`. La UI expone dinámicamente un botón "Enviar a Notion" interactivo si la integración está activa.
-
-### 6. Selector de idioma inteligente en un clic (Parte 6)
-Evita los memos con secciones mezcladas en inglés y español. Mediante un selector en el formulario principal, el usuario elige el idioma de destino del análisis (`es` o `en`). Este valor se guarda en la tabla `Task` y se inyecta dinámicamente como instrucción prioritaria a los 7 agentes de CrewAI, quienes traducen, sintetizan y emiten el veredicto íntegramente en el idioma solicitado.
-
----
-
-## 👨‍💻 Creador y Atribuciones
-
-**VerdictIQ** es desarrollado y mantenido por **[Marlon Baez Mendez](https://github.com/athenacoree/MARLON-BAEZ-MENDEZ-)**.
-
-Este proyecto se originó como un fork de un repositorio de código abierto bajo licencia MIT desarrollado originalmente por **Suresh Beekhani**. Conservamos y respetamos honestamente la autoría de las porciones del código original; sin embargo, el sistema ha sido sustancialmente reescrito, rediseñado y expandido con un conjunto de características avanzadas de nivel empresarial para optimizar consumos, rotar accesos, procesar pagos y robustecer la seguridad global.
+- **Creado y Mantenido por:** **[Marlon Baez Mendez](https://github.com/athenacoree/MARLON-BAEZ-MENDEZ-)**
+- **Atribución Original:** Este proyecto incorpora elementos evolucionados basados en el trabajo original de código abierto con licencia MIT de **Suresh Beekhani**. Conservamos y respetamos íntegramente los avisos de autoría original y copyright aplicables.

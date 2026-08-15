@@ -1168,14 +1168,17 @@
                 headers: { 'Authorization': 'Bearer ' + this.token }
             });
             const data = await res.json();
+            if (res.status !== 200 || !data.result) {
+                throw new Error(data.detail || 'Error al cargar el reporte.');
+            }
             this.resultData = data.result;
-            this.llmUsed = data.result.llm_provider || 'OpenRouter';
+            this.llmUsed = (data.result && data.result.llm_provider) || 'OpenRouter';
             this.progressPercent = 100;
             this.isLoading = false;
             this.showResult = true;
             await this.loadReports();
         } catch (err) {
-            this.errorMessage = 'Failed to load completed report.';
+            this.errorMessage = err.message || 'Error al cargar el reporte completado.';
             this.isLoading = false;
         }
     },
