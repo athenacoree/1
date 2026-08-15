@@ -1,19 +1,19 @@
-# DealScout AI — Multi-Agent Venture Capital Due Diligence & Investment Directory
+# VerdictIQ — Multi-Agent Venture Capital Due Diligence & Investment Directory
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/athenacoree/1)
 
 sitio: 
-https://dealscout-ai.onrender.com/
-**DealScout AI** (configurado internamente como `VCDueDiligenceAgent`) es una plataforma autónoma de auditoría (*due diligence*) y directorio bidireccional de inversión para startups y firmas de Venture Capital de nivel empresarial. Construida con **FastAPI**, **SQLAlchemy** y **CrewAI**, permite evaluar de forma profunda startups a partir de URLs públicas, presentaciones Pitch Deck (PDF/PPTX) o perfiles de LinkedIn, resolviendo la necesidad de análisis preliminares de alta fidelidad sin incurrir en procesos manuales lentos.
+https://verdictiq.onrender.com/
+**VerdictIQ** (configurado internamente como `VCDueDiligenceAgent`) es una plataforma autónoma de auditoría (*due diligence*) y directorio bidireccional de inversión para startups y firmas de Venture Capital de nivel empresarial. Construida con **FastAPI**, **SQLAlchemy** y **CrewAI**, permite evaluar de forma profunda startups a partir de URLs públicas, presentaciones Pitch Deck (PDF/PPTX) o perfiles de LinkedIn, resolviendo la necesidad de análisis preliminares de alta fidelidad sin incurrir en procesos manuales lentos.
 
 ---
 
-## ⚡ ¿Qué hace diferente a DealScout AI?
+## ⚡ ¿Qué hace diferente a VerdictIQ?
 
-DealScout AI no es un "simple wrapper" o intermediario superficial de APIs de Inteligencia Artificial. Está diseñado bajo rigurosos patrones de ingeniería de software e infraestructura distribuida:
+VerdictIQ no es un "simple wrapper" o intermediario superficial de APIs de Inteligencia Artificial. Está diseñado bajo rigurosos patrones de ingeniería de software e infraestructura distribuida:
 
 1. **Pipeline Cognitivo Multi-Agente con Debate Adversarial (7 Agentes)**
-   En lugar de una sola llamada masiva a un LLM, DealScout AI coordina un equipo de 7 agentes especializados de **CrewAI** que actúan como un comité real de analistas de inversión. Los primeros 5 analistas especialistas (Market Research, Competitive Intelligence, Customer Insights, Product Strategy, y Omission Analyst) investigan y extraen hallazgos estructurados. Luego, el **Business Analyst** compila el reporte final, el cual es sometido al riguroso análisis adversarial del agente **Devil's Advocate** (Abogado del Diablo), encargado de cuestionar críticamente las tesis positivas de inversión, aportando un debate de nivel profesional inusual en sistemas automatizados.
+   En lugar de una sola llamada masiva a un LLM, VerdictIQ coordina un equipo de 7 agentes especializados de **CrewAI** que actúan como un comité real de analistas de inversión. Los primeros 5 analistas especialistas (Market Research, Competitive Intelligence, Customer Insights, Product Strategy, y Omission Analyst) investigan y extraen hallazgos estructurados. Luego, el **Business Analyst** compila el reporte final, el cual es sometido al riguroso análisis adversarial del agente **Devil's Advocate** (Abogado del Diablo), encargado de cuestionar críticamente las tesis positivas de inversión, aportando un debate de nivel profesional inusual en sistemas automatizados.
 
 2. **Lógica de "Hallazgos Estructurados" de Bajo Consumo**
    Para optimizar costes y evitar la "alucinación" y verbosidad innecesaria de la IA, los agentes especialistas no se pasan prosa larga entre sí. Cada uno genera y transmite un esquema **Pydantic** compacto (`AgentFinding`) con datos atómicos altamente condensados. Únicamente el agente de síntesis final redacta la prosa en formato de memorando humano. Esto reduce drásticamente el consumo de tokens de contexto y maximiza la precisión analítica.
@@ -22,16 +22,16 @@ DealScout AI no es un "simple wrapper" o intermediario superficial de APIs de In
    El sistema integra un orquestador multi-fuente (`source_orchestrator.py`) que gestiona consultas en paralelo (con un pool de hilos) a bases de datos de producción reales. El orquestador divide las fuentes en *necesarias* y *condicionales*. Basándose en heurísticas de dominio del startup y lo que se va descubriendo, el motor decide inteligentemente cuáles de las 12 fuentes consultar (SEC EDGAR Form D, patentes de la USPTO, litigios en CourtListener, registros de OpenCorporates, estado de sanciones de la OFAC SDN con fuzzy matching, GitHub, WHOIS, etc.), ahorrando recursos de red y cuotas de API.
 
 4. **Resiliencia de Infraestructura Empresarial**
-   DealScout AI incorpora un sistema avanzado de **circuit breaker** en memoria que pausa automáticamente las consultas a fuentes externas caídas o con timeouts para evitar demoras, un **Pool de API Keys con Rotación Automática (`ApiKeyPool`)** que detecta y aísla llaves con fallos consecutivos de cuotas (*rate limits*), y mitigaciones estrictas contra ataques **SSRF** para asegurar que el motor de scraping no sea utilizado de manera maliciosa.
+   VerdictIQ incorpora un sistema avanzado de **circuit breaker** en memoria que pausa automáticamente las consultas a fuentes externas caídas o con timeouts para evitar demoras, un **Pool de API Keys con Rotación Automática (`ApiKeyPool`)** que detecta y aísla llaves con fallos consecutivos de cuotas (*rate limits*), y mitigaciones estrictas contra ataques **SSRF** para asegurar que el motor de scraping no sea utilizado de manera maliciosa.
 
 5. **Despliegue Transparente y 100% Reproducible**
-   Con la integración de Render Blueprints, puedes desplegar tu propio DealScout AI totalmente funcional con un solo clic, demostrando que es un sistema transparente, desacoplado y listo para ambientes de producción reales.
+   Con la integración de Render Blueprints, puedes desplegar tu propio VerdictIQ totalmente funcional con un solo clic, demostrando que es un sistema transparente, desacoplado y listo para ambientes de producción reales.
 
 ---
 
 ## 🚀 Despliegue en un Clic (Render Blueprint)
 
-Puedes desplegar una copia completa de DealScout AI y su base de datos relacional PostgreSQL de forma instantánea en la nube de Render usando el botón superior o el siguiente enlace:
+Puedes desplegar una copia completa de VerdictIQ y su base de datos relacional PostgreSQL de forma instantánea en la nube de Render usando el botón superior o el siguiente enlace:
 
 **[Desplegar en Render](https://render.com/deploy?repo=https://github.com/athenacoree/1)**
 
@@ -41,7 +41,7 @@ Al hacer clic en el botón de despliegue, el formulario de Render te solicitará
 
 #### 🔴 Obligatorias (Para que el sistema arranque con éxito):
 - `JWT_SECRET`: Una cadena de texto segura para firmar y verificar tokens de autenticación JWT. La aplicación fallará explícitamente en el inicio si se deja en blanco.
-- `ADMIN_BOOTSTRAP_PASSWORD`: Contraseña para inicializar el usuario administrador predeterminado (`admin@dealscout.ai`).
+- `ADMIN_BOOTSTRAP_PASSWORD`: Contraseña para inicializar el usuario administrador predeterminado (`admin@verdictiq.ai`).
 - `API_KEY_OPENROUTER`: Tu API Key de OpenRouter (u otro LLM admitido como OpenAI o Grok) para alimentar las llamadas cognitivas de los agentes de IA.
 
 #### 🟢 Opcionales (Configurables para extender funcionalidades):
@@ -169,8 +169,8 @@ A diferencia de los ajustes de diseño configurables desde el Panel de Admin, es
 ### 1. Clonar el Repositorio e Instalar Dependencias
 Asegúrate de contar con Python y Poetry instalado en tu máquina de desarrollo:
 ```bash
-git clone https://github.com/athenacoree/1.git DealScoutAI
-cd DealScoutAI
+git clone https://github.com/athenacoree/1.git VerdictIQ
+cd VerdictIQ
 poetry install
 poetry run playwright install chromium
 ```
@@ -200,8 +200,8 @@ poetry run python -m vcdiligence.app
 ```
 La aplicación estará disponible en `http://localhost:10000`.
 
-- **Analista de Prueba:** `analyst@dealscout.ai` / `analystpassword`
-- **Administrador de Prueba:** `admin@dealscout.ai` / `adminpassword`
+- **Analista de Prueba:** `analyst@verdictiq.ai` / `analystpassword`
+- **Administrador de Prueba:** `admin@verdictiq.ai` / `adminpassword`
 
 ---
 
@@ -216,7 +216,7 @@ poetry run python -m unittest discover -s tests
 
 ## 🌟 Últimas Mejoras e Integraciones (Actualización 2026)
 
-DealScout AI se ha robustecido con una serie de características avanzadas de última generación:
+VerdictIQ se ha robustecido con una serie de características avanzadas de última generación:
 
 ### 1. Fuentes estructuradas por sección (Parte 1)
 En lugar de amontonar todas las referencias al final del documento, ahora las fuentes de información de mercado, competencia, producto y legales se atribuyen de manera ultra-localizada. Al final de cada subsección relevante del Deep Dive, se renderiza un bloque de citas exacto en formato markdown interactivo:
@@ -241,6 +241,6 @@ Evita los memos con secciones mezcladas en inglés y español. Mediante un selec
 
 ## 👨‍💻 Creador y Atribuciones
 
-**DealScout AI** es desarrollado y mantenido por **[Marlon Baez Mendez](https://github.com/athenacoree/MARLON-BAEZ-MENDEZ-)**.
+**VerdictIQ** es desarrollado y mantenido por **[Marlon Baez Mendez](https://github.com/athenacoree/MARLON-BAEZ-MENDEZ-)**.
 
 Este proyecto se originó como un fork de un repositorio de código abierto bajo licencia MIT desarrollado originalmente por **Suresh Beekhani**. Conservamos y respetamos honestamente la autoría de las porciones del código original; sin embargo, el sistema ha sido sustancialmente reescrito, rediseñado y expandido con un conjunto de características avanzadas de nivel empresarial para optimizar consumos, rotar accesos, procesar pagos y robustecer la seguridad global.

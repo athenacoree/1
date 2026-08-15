@@ -41,10 +41,10 @@ class TestPaymentsAndCredits(unittest.TestCase):
         self.client = TestClient(app)
 
         # Seed Organization and User
-        self.org = Organization(id=1, company_name="DealScout Capital")
+        self.org = Organization(id=1, company_name="VerdictIQ Capital")
         self.user = User(
             id=1,
-            email="payments_analyst@dealscout.ai",
+            email="payments_analyst@verdictiq.ai",
             hashed_password=hash_password("testpassword123"),
             role="analista",
             organization_id=1

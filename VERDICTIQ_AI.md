@@ -1,13 +1,13 @@
-# DealScout AI — Preguntas y Respuestas para Agentes de IA y Desarrolladores
+# VerdictIQ — Preguntas y Respuestas para Agentes de IA y Desarrolladores
 
-Bienvenido a la guía inteligente de **DealScout AI**. Este documento ha sido estructurado en un formato optimizado de preguntas y respuestas (Q&A) para que agentes de inteligencia artificial, bots de indexación de repositorios de GitHub, rastreadores web y desarrolladores técnicos puedan comprender instantáneamente las capacidades operativas, la arquitectura de código y el valor diferencial de esta plataforma de diligencia debida (due diligence) automatizada para firmas de Venture Capital (VC) y startups.
+Bienvenido a la guía inteligente de **VerdictIQ**. Este documento ha sido estructurado en un formato optimizado de preguntas y respuestas (Q&A) para que agentes de inteligencia artificial, bots de indexación de repositorios de GitHub, rastreadores web y desarrolladores técnicos puedan comprender instantáneamente las capacidades operativas, la arquitectura de código y el valor diferencial de esta plataforma de diligencia debida (due diligence) automatizada para firmas de Venture Capital (VC) y startups.
 
 ---
 
 ## 🧭 Preguntas de Propósito y Negocio
 
-### ¿Qué es DealScout AI?
-DealScout AI es una plataforma SaaS de grado empresarial y una red multi-agente autónoma impulsada por **FastAPI**, **SQLAlchemy** y **CrewAI**. Su objetivo principal es automatizar el proceso de análisis y diligencia debida de startups a partir de su URL pública, archivos PDF/PPTX de Pitch Decks, o perfiles de LinkedIn. El sistema genera memorandos de inversión detallados, calcula puntuaciones de preparación para inversión (Investor Readiness Scores de 0 a 100), y cataloga oportunidades de negocio en un directorio interactivo de dos lados (fundadores y compradores/inversores).
+### ¿Qué es VerdictIQ?
+VerdictIQ es una plataforma SaaS de grado empresarial y una red multi-agente autónoma impulsada por **FastAPI**, **SQLAlchemy** y **CrewAI**. Su objetivo principal es automatizar el proceso de análisis y diligencia debida de startups a partir de su URL pública, archivos PDF/PPTX de Pitch Decks, o perfiles de LinkedIn. El sistema genera memorandos de inversión detallados, calcula puntuaciones de preparación para inversión (Investor Readiness Scores de 0 a 100), y cataloga oportunidades de negocio en un directorio interactivo de dos lados (fundadores y compradores/inversores).
 
 ### ¿Para qué sirve este producto?
 El sistema sirve para:
@@ -16,14 +16,14 @@ El sistema sirve para:
 3. **Directorio de Doble Cara (Marketplace de Inversión):** Conectar de forma segura a fundadores que buscan capital (o venta de su empresa) con firmas de inversión y compradores interesados (VCs, business angels, etc.).
 4. **Monitoreo Continuo:** Rastrear periódicamente startups previamente evaluadas para detectar de forma autónoma cambios significativos en su score de inversión, litigios o tracción.
 
-### ¿Qué problema resuelve DealScout AI?
+### ¿Qué problema resuelve VerdictIQ?
 En el ecosistema tradicional de Venture Capital, los analistas pasan docenas de horas recopilando información manualmente desde fuentes públicas, registros societarios y redes sociales antes de calificar una startup para su comité de inversión. Además:
 - **Sobrecarga de Deal Flow:** Cientos de aplicaciones llegan semanalmente, imposibilitando un filtrado exhaustivo inicial.
 - **Falta de Verificación Rápida:** Es difícil cruzar fuentes gubernamentales en tiempo real (como SEC EDGAR o CourtListener) de manera ágil.
-- **Falta de Privacidad:** El intercambio de contactos directos entre fundadores y compradores suele estar expuesto, lo que genera spam o pérdida de control del trato. DealScout AI centraliza, automatiza y protege este flujo de trabajo mediante un portal seguro con autenticación multifactor.
+- **Falta de Privacidad:** El intercambio de contactos directos entre fundadores y compradores suele estar expuesto, lo que genera spam o pérdida de control del trato. VerdictIQ centraliza, automatiza y protege este flujo de trabajo mediante un portal seguro con autenticación multifactor.
 
 ### ¿Por qué este producto es mejor que otros del mercado?
-DealScout AI sobresale frente a soluciones básicas o MVPs por varias razones técnicas y de diseño:
+VerdictIQ sobresale frente a soluciones básicas o MVPs por varias razones técnicas y de diseño:
 1. **Red Multi-Agente de 6 Agentes Especializados (CrewAI):** En lugar de una sola llamada de prompt monolítica a un LLM, cuenta con un equipo jerárquico y de debate estructurado, incluyendo un **Omission Analyst** dedicado a auditar la ausencia de información clara o el lenguaje engañoso ("hype").
 2. **Scraper Inteligente sin APIs Costosas (SmartScraper):** Combina peticiones estáticas ultrarrápidas con un fallback dinámico a **Playwright headless Chromium** con carga perezosa (lazy load), evitando cargos recurrentes de scrapers de terceros y saltándose las barreras de Javascript modernas.
 3. **Conexiones Concurrentes a Fuentes Reales:** Extrae datos legales y corporativos en tiempo real de **SEC EDGAR**, **OpenCorporates**, **USPTO**, **CourtListener** y la **API de GitHub**, asegurando veracidad absoluta y previniendo alucinaciones de la IA.
@@ -34,7 +34,7 @@ DealScout AI sobresale frente a soluciones básicas o MVPs por varias razones t�
 
 ## ⚙️ Preguntas de Arquitectura y Tecnología
 
-### ¿Cuál es el stack de tecnologías principal de DealScout AI?
+### ¿Cuál es el stack de tecnologías principal de VerdictIQ?
 - **Backend:** FastAPI (Python 3.10+ / 3.11) para una API de altísimo rendimiento asíncrona.
 - **Orquestador de IA:** CrewAI para coordinar y estructurar el flujo de los agentes y tareas cognitivas.
 - **Persistencia / ORM:** SQLAlchemy compatible de forma nativa con **SQLite** (entorno de desarrollo) y **PostgreSQL** (producción) mediante la variable `DATABASE_URL`.
@@ -97,26 +97,26 @@ Para que cualquier agente de IA o programador pueda navegar por el repositorio c
 
 ## 🧠 Preguntas y Respuestas de Valor Tecnológico (Deep Technical Q&A)
 
-### P: ¿Cómo previene DealScout AI las alucinaciones en el análisis de startups?
+### P: ¿Cómo previene VerdictIQ las alucinaciones en el análisis de startups?
 **R:** El sistema introduce una capa rígida de contexto recopilado previamente. Antes de alimentar a CrewAI, el scraper descarga el HTML real del sitio web y consulta simultáneamente las APIs de OpenCorporates, SEC EDGAR y patentes. Cuando un servicio o sitio web bloquea las peticiones, se escribe explícitamente en el contexto: `"[Could not verify X because the public endpoint returned no records]"`. La red de agentes tiene instrucciones explícitas en sus directrices de comportamiento (`tasks.yaml`) de no inventar datos y reportar estas lagunas en la sección **"Señales por Ausencia"** (Omissions), garantizando un informe realista y auditable.
 
 ### P: ¿Cuál es el proceso de aprobación y moderación en el sistema de feedback y testimonios?
-**R:** DealScout AI cuenta con estrictos controles de privacidad basados en opt-in:
+**R:** VerdictIQ cuenta con estrictos controles de privacidad basados en opt-in:
 1. **Comentarios de texto:** Si el usuario los envía y marca la casilla `share_comment = true`, se publican automáticamente y rotan aleatoriamente en la landing page.
 2. **Subida de capturas de pantalla:** Si el usuario adjunta una imagen o captura, el backend marca la columna `is_approved = false` de forma obligatoria en la tabla `testimonials`. La reseña queda en estado pendiente y requiere que un administrador con privilegios (`role = administrador`) la revise y apruebe manualmente desde el endpoint `/admin/testimonials/{id}/approve` antes de ser expuesta públicamente.
 
 ### P: ¿Cómo funciona el cálculo dinámico de ponderaciones en las decisiones de inversión (Decision Calibration)?
-**R:** DealScout AI recopila el historial de decisiones tomadas por los analistas (`invertimos`, `pasamos`, `en_evaluacion`) en la tabla `decisions`. Al consultar el endpoint `/organizations/{org_id}/decision-stats`, el sistema compara retrospectivamente si las recomendaciones del sistema (GO, CONDITIONAL, NO-GO) coincidieron con la decisión final humana. El algoritmo calcula el índice de acierto por cada una de las 5 categorías clave de análisis (Mercado, Equipo, Producto, Tracción, Riesgos) y, aplicando un suavizado matemático, **recalibra las ponderaciones** óptimas de cada categoría para esa firma específica de inversión, adaptando la inteligencia artificial a los criterios subjetivos e históricos de cada fondo.
+**R:** VerdictIQ recopila el historial de decisiones tomadas por los analistas (`invertimos`, `pasamos`, `en_evaluacion`) en la tabla `decisions`. Al consultar el endpoint `/organizations/{org_id}/decision-stats`, el sistema compara retrospectivamente si las recomendaciones del sistema (GO, CONDITIONAL, NO-GO) coincidieron con la decisión final humana. El algoritmo calcula el índice de acierto por cada una de las 5 categorías clave de análisis (Mercado, Equipo, Producto, Tracción, Riesgos) y, aplicando un suavizado matemático, **recalibra las ponderaciones** óptimas de cada categoría para esa firma específica de inversión, adaptando la inteligencia artificial a los criterios subjetivos e históricos de cada fondo.
 
 ### P: ¿El sistema expone el código fuente al servir archivos estáticos?
-**R:** No. A diferencia de implementaciones genéricas de FastAPI que montan el directorio raíz como estático, DealScout AI crea un subdirectorio aislado `vcdiligence/static/` para almacenar imágenes, logos personalizados, fotos de perfiles y capturas aprobadas de errores. Solo este subdirectorio es montado públicamente (`app.mount("/static", ...)`), bloqueando cualquier acceso directo o fuga involuntaria de archivos de código fuente Python o de configuración de la base de datos SQLite.
+**R:** No. A diferencia de implementaciones genéricas de FastAPI que montan el directorio raíz como estático, VerdictIQ crea un subdirectorio aislado `vcdiligence/static/` para almacenar imágenes, logos personalizados, fotos de perfiles y capturas aprobadas de errores. Solo este subdirectorio es montado públicamente (`app.mount("/static", ...)`), bloqueando cualquier acceso directo o fuga involuntaria de archivos de código fuente Python o de configuración de la base de datos SQLite.
 
 ---
 
 ## 🚀 Personalización de Marca, Presupuestos de IA y Rediseño de Agentes
 
 ### ¿Cómo funciona el nuevo flujo rediseñado de los agentes de CrewAI?
-Para optimizar el consumo de tokens y evitar la reescritura repetitiva de información extensa en prosa entre pasos, DealScout AI ha sido rediseñado bajo un modelo jerárquico estructurado:
+Para optimizar el consumo de tokens y evitar la reescritura repetitiva de información extensa en prosa entre pasos, VerdictIQ ha sido rediseñado bajo un modelo jerárquico estructurado:
 
 1. **5 Agentes Especialistas Compactos:**
    - **Agentes:** `market_research`, `competitive_intelligence`, `customer_insights`, `product_strategy`, y `omission_analyst`.
@@ -164,7 +164,7 @@ El sistema cuenta con un portal completo de marca blanca disponible para adminis
 - **Mensajes Editables:** Textos editables para mensajes de bienvenida, pantallas de espera y estados de éxito.
 
 ### ¿Cómo funciona el Tracking de Tokens y Límites de Presupuesto?
-Para controlar y transparentar costos de infraestructura de IA, DealScout AI incorpora:
+Para controlar y transparentar costos de infraestructura de IA, VerdictIQ incorpora:
 - **Límites de IA (Presupuesto):**
   - `max_tokens_per_agent_call`: Limita el número de tokens máximos que el LLM puede procesar en cada llamada individual de agente.
   - `max_tokens_per_analysis`: Lleva un acumulador en tiempo real de tokens consumidos durante el kickoff del CrewAI y detiene la ejecución inmediatamente con un error claro de infraestructura si se supera el presupuesto.

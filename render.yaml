@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: dealscout-ai
+    name: verdictiq
     env: python
     plan: free
     buildCommand: pip install --upgrade pip && pip install -e . && playwright install chromium
@@ -14,7 +14,7 @@ services:
 
       - key: APP_BASE_URL
         sync: false
-        description: "URL pública del servicio en Render (ej. https://dealscout-ai.onrender.com)"
+        description: "URL pública del servicio en Render (ej. https://verdictiq.onrender.com)"
 
       - key: ALLOWED_ORIGINS
         sync: false
@@ -90,7 +90,7 @@ services:
       #   sync: false
       #   description: "Opcional: Contraseña de tu correo SMTP"
       # - key: SMTP_FROM
-      #   value: "noreply@dealscout.ai"
+      #   value: "noreply@verdictiq.ai"
       #   description: "Opcional: Remitente de los correos automáticos"
 
 databases:

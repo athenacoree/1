@@ -250,6 +250,45 @@
     // Error Reporting Widget
     showErrorModal: false,
     errorDescription: '',
+    // Toast notification state
+    toastMessage: '',
+    showToast: false,
+    showToastNotification(msg) {
+        this.toastMessage = msg;
+        this.showToast = true;
+        setTimeout(() => { this.showToast = false; }, 3500);
+    },
+    // View mode conmutador
+    viewMode: 'cards', // 'cards' or 'table'
+
+    // 10 Interactive Tools Modals State
+    showToolRunway: false,
+    toolRunwayCash: 1000000,
+    toolRunwayBurn: 50000,
+    toolRunwayMrr: 10000,
+    showToolValuation: false,
+    toolArrUsd: 500000,
+    toolSectorMultiple: 10,
+    showToolIrr: false,
+    toolInvestmentUsd: 250000,
+    toolOwnershipPct: 10,
+    toolExitValuationUsd: 15000000,
+    showToolIcQuiz: false,
+    showToolTam: false,
+    toolTamTopDown: 1000000000,
+    toolTamTargetPct: 2,
+    showToolTermsheet: false,
+    showToolEsop: false,
+    toolEsopPct: 10,
+    toolPreValuation: 5000000,
+    showToolUnitEcon: false,
+    toolCacUsd: 500,
+    toolArpuUsd: 100,
+    toolLifespanMonths: 24,
+    showToolAudioScript: false,
+    toolAudioCompany: 'Startup AI',
+    showToolEsgQuiz: false,
+
     errorUrl: window.location.href,
     errorScreenshotFile: null,
 
@@ -336,7 +375,7 @@
             await this.loadReports();
 
             // Auto-resume polling if an analysis was in progress
-            const savedTaskId = localStorage.getItem('dealscout_active_task_id');
+            const savedTaskId = localStorage.getItem('verdictiq_active_task_id');
             if (savedTaskId) {
                 this.taskId = savedTaskId;
                 this.isLoading = true;
@@ -1074,7 +1113,7 @@
     startPolling() {
         this.partialSections = {};
         if (this.taskId) {
-            localStorage.setItem('dealscout_active_task_id', this.taskId);
+            localStorage.setItem('verdictiq_active_task_id', this.taskId);
         }
         if (this.pollInterval) clearInterval(this.pollInterval);
         let consecutiveFailures = 0;
@@ -1093,7 +1132,7 @@
                 if (data.status === 'completed') {
                     clearInterval(this.pollInterval);
                     this.pollInterval = null;
-                    localStorage.removeItem('dealscout_active_task_id');
+                    localStorage.removeItem('verdictiq_active_task_id');
                     this.resultData = data.result;
                     this.llmUsed = data.result.llm_provider || 'OpenRouter';
                     this.isLoading = false;
@@ -1104,7 +1143,7 @@
                 } else if (data.status === 'failed') {
                     clearInterval(this.pollInterval);
                     this.pollInterval = null;
-                    localStorage.removeItem('dealscout_active_task_id');
+                    localStorage.removeItem('verdictiq_active_task_id');
                     this.errorMessage = data.message;
                     this.isLoading = false;
                 }
@@ -1114,7 +1153,7 @@
                 if (consecutiveFailures >= 3) {
                     clearInterval(this.pollInterval);
                     this.pollInterval = null;
-                    localStorage.removeItem('dealscout_active_task_id');
+                    localStorage.removeItem('verdictiq_active_task_id');
                     this.errorMessage = 'Connection interrupted after multiple attempts. Please try again.';
                     this.isLoading = false;
                 }
@@ -1149,7 +1188,7 @@
             }
             clearInterval(this.pollInterval);
             this.pollInterval = null;
-            localStorage.removeItem('dealscout_active_task_id');
+            localStorage.removeItem('verdictiq_active_task_id');
         }
         this.errorMessage = '';
         this.isLoading = true;
@@ -1753,6 +1792,26 @@ This Term Sheet is non-binding and serves as a framework for drafting definitive
         </div>
 
         <div x-show="!showDirectory" class="w-full">
+
+            <!-- 10 Herramientas Interactivas Bar -->
+            <div class="mt-6 p-4 rounded-2xl bg-slate-900/40 border border-slate-800 backdrop-blur-md">
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <span class="text-cyan-400">🛠️</span> Herramientas Interactivas de Análisis & Valoración:
+                </div>
+                <div class="flex flex-wrap gap-2 text-xs">
+                    <button @click="showToolRunway = true" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-cyan-950 hover:text-cyan-300 text-slate-300 border border-slate-700 transition-all font-medium">🔥 Runway & Burn</button>
+                    <button @click="showToolValuation = true" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-cyan-950 hover:text-cyan-300 text-slate-300 border border-slate-700 transition-all font-medium">📊 Valoración EV/ARR</button>
+                    <button @click="showToolIrr = true" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-cyan-950 hover:text-cyan-300 text-slate-300 border border-slate-700 transition-all font-medium">🚀 Retorno MoIC</button>
+                    <button @click="showToolIcQuiz = true" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-cyan-950 hover:text-cyan-300 text-slate-300 border border-slate-700 transition-all font-medium">📝 Cuestionario IC</button>
+                    <button @click="showToolTam = true" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-cyan-950 hover:text-cyan-300 text-slate-300 border border-slate-700 transition-all font-medium">🌐 TAM/SAM/SOM</button>
+                    <button @click="showToolTermsheet = true" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-cyan-950 hover:text-cyan-300 text-slate-300 border border-slate-700 transition-all font-medium">📜 Check Term Sheet</button>
+                    <button @click="showToolEsop = true" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-cyan-950 hover:text-cyan-300 text-slate-300 border border-slate-700 transition-all font-medium">👥 Pool ESOP</button>
+                    <button @click="showToolUnitEcon = true" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-cyan-950 hover:text-cyan-300 text-slate-300 border border-slate-700 transition-all font-medium">📈 CAC vs LTV</button>
+                    <button @click="showToolAudioScript = true" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-cyan-950 hover:text-cyan-300 text-slate-300 border border-slate-700 transition-all font-medium">🎙️ Audio Script</button>
+                    <button @click="showToolEsgQuiz = true" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-cyan-950 hover:text-cyan-300 text-slate-300 border border-slate-700 transition-all font-medium">🛡️ Quiz ESG</button>
+                </div>
+            </div>
+
             <!-- Normal layout starts below -->
 
         <!-- Early Validation Banner (Unauthenticated only or Stats Hidden fallback) -->
@@ -3598,6 +3657,277 @@ This Term Sheet is non-binding and serves as a framework for drafting definitive
         </div>
     </div>
 
+
+    <!-- ==================== 10 HERRAMIENTAS INTERACTIVAS (VERDICTIQ V2) ==================== -->
+
+    <!-- 1. Calculadora Interactiva de Runway y Burn Rate -->
+    <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto" x-show="showToolRunway" style="display: none;">
+        <div class="glass-premium p-8 rounded-3xl max-w-xl w-full text-left">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-black text-white flex items-center gap-2"><span class="text-cyan-400">🔥</span> Calculadora de Runway & Cash Burn</h3>
+                <button @click="showToolRunway = false" class="text-slate-400 hover:text-white font-bold text-sm">Cerrar</button>
+            </div>
+            <div class="space-y-4 text-xs">
+                <div>
+                    <label class="block text-slate-400 font-bold mb-1">Saldo en Caja (USD)</label>
+                    <input type="number" x-model.number="toolRunwayCash" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-slate-400 font-bold mb-1">Burn Rate Mensual (USD)</label>
+                        <input type="number" x-model.number="toolRunwayBurn" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 font-bold mb-1">MRR Ingresos (USD)</label>
+                        <input type="number" x-model.number="toolRunwayMrr" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white">
+                    </div>
+                </div>
+                <div class="p-4 rounded-2xl bg-cyan-950/30 border border-cyan-500/30 text-center mt-4">
+                    <div class="text-slate-400 font-bold uppercase text-[10px]">Runway Estimado</div>
+                    <div class="text-3xl font-black text-cyan-400 mt-1" x-text="Math.max(0, Math.round(toolRunwayCash / Math.max(1, toolRunwayBurn - toolRunwayMrr))) + ' Meses'"></div>
+                    <div class="text-[11px] text-slate-400 mt-1">Net Burn Mensual: $<span x-text="Math.max(0, toolRunwayBurn - toolRunwayMrr).toLocaleString()"></span> USD</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Matriz de Valoración EV/ARR por Sector -->
+    <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto" x-show="showToolValuation" style="display: none;">
+        <div class="glass-premium p-8 rounded-3xl max-w-xl w-full text-left">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-black text-white flex items-center gap-2"><span class="text-cyan-400">📊</span> Matriz de Valoración EV / ARR</h3>
+                <button @click="showToolValuation = false" class="text-slate-400 hover:text-white font-bold text-sm">Cerrar</button>
+            </div>
+            <div class="space-y-4 text-xs">
+                <div>
+                    <label class="block text-slate-400 font-bold mb-1">ARR Actual (USD)</label>
+                    <input type="number" x-model.number="toolArrUsd" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white">
+                </div>
+                <div>
+                    <label class="block text-slate-400 font-bold mb-1">Múltiplo de Sector (EV/ARR)</label>
+                    <select x-model.number="toolSectorMultiple" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white">
+                        <option value="8">SaaS Tradicional (8x)</option>
+                        <option value="12">Enterprise SaaS & AI (12x)</option>
+                        <option value="15">Hyper-growth Generative AI (15x)</option>
+                        <option value="6">Fintech / B2B Marketplace (6x)</option>
+                    </select>
+                </div>
+                <div class="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 text-center mt-4">
+                    <div class="text-slate-400 font-bold uppercase text-[10px]">Valoración de Empresa Estimada (EV)</div>
+                    <div class="text-3xl font-black text-emerald-400 mt-1" x-text="'$' + (toolArrUsd * toolSectorMultiple).toLocaleString() + ' USD'"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Simulador de Retorno MoIC / IRR Waterfall -->
+    <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto" x-show="showToolIrr" style="display: none;">
+        <div class="glass-premium p-8 rounded-3xl max-w-xl w-full text-left">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-black text-white flex items-center gap-2"><span class="text-cyan-400">🚀</span> Simulador de Retorno (MoIC & Exit Waterfall)</h3>
+                <button @click="showToolIrr = false" class="text-slate-400 hover:text-white font-bold text-sm">Cerrar</button>
+            </div>
+            <div class="space-y-4 text-xs">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-slate-400 font-bold mb-1">Inversión Realizada (USD)</label>
+                        <input type="number" x-model.number="toolInvestmentUsd" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 font-bold mb-1">Participación Adquirida (%)</label>
+                        <input type="number" x-model.number="toolOwnershipPct" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-slate-400 font-bold mb-1">Valoración Estimada de Salida / M&A (USD)</label>
+                    <input type="number" x-model.number="toolExitValuationUsd" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white">
+                </div>
+                <div class="grid grid-cols-2 gap-4 mt-4">
+                    <div class="p-4 rounded-2xl bg-cyan-950/30 border border-cyan-500/30 text-center">
+                        <div class="text-slate-400 font-bold uppercase text-[10px]">Retorno Bruto (USD)</div>
+                        <div class="text-2xl font-black text-cyan-400 mt-1" x-text="'$' + (toolExitValuationUsd * (toolOwnershipPct/100)).toLocaleString()"></div>
+                    </div>
+                    <div class="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 text-center">
+                        <div class="text-slate-400 font-bold uppercase text-[10px]">Múltiplo MoIC</div>
+                        <div class="text-2xl font-black text-emerald-400 mt-1" x-text="((toolExitValuationUsd * (toolOwnershipPct/100)) / Math.max(1, toolInvestmentUsd)).toFixed(2) + 'x'"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Generador de Cuestionario IC -->
+    <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto" x-show="showToolIcQuiz" style="display: none;">
+        <div class="glass-premium p-8 rounded-3xl max-w-xl w-full text-left">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-black text-white flex items-center gap-2"><span class="text-cyan-400">📝</span> Preguntas Clave para Comité de Inversión</h3>
+                <button @click="showToolIcQuiz = false" class="text-slate-400 hover:text-white font-bold text-sm">Cerrar</button>
+            </div>
+            <div class="space-y-3 text-xs text-slate-300">
+                <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">1. ¿Cuál es el foso defensivo (moat) tecnológico frente a competidores directos?</div>
+                <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">2. ¿Cómo evoluciona la retención neta de ingresos (NDR) en las cohortes de clientes?</div>
+                <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">3. ¿Cuál es la concentración de ingresos en los primeros 3 clientes B2B?</div>
+                <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">4. ¿Existe alineación de vesting y cláusulas de permanencia para los fundadores?</div>
+                <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">5. ¿Qué hitos operacionales clave se alcanzarán con esta ronda de capital?</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. Calculadora TAM / SAM / SOM -->
+    <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto" x-show="showToolTam" style="display: none;">
+        <div class="glass-premium p-8 rounded-3xl max-w-xl w-full text-left">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-black text-white flex items-center gap-2"><span class="text-cyan-400">🌐</span> Estimador de Mercado TAM / SAM / SOM</h3>
+                <button @click="showToolTam = false" class="text-slate-400 hover:text-white font-bold text-sm">Cerrar</button>
+            </div>
+            <div class="space-y-4 text-xs">
+                <div>
+                    <label class="block text-slate-400 font-bold mb-1">TAM Mercado Total Dirigible (USD)</label>
+                    <input type="number" x-model.number="toolTamTopDown" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white">
+                </div>
+                <div>
+                    <label class="block text-slate-400 font-bold mb-1">Meta Objetivo de Captura SOM (%)</label>
+                    <input type="number" x-model.number="toolTamTargetPct" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white">
+                </div>
+                <div class="grid grid-cols-2 gap-4 mt-4">
+                    <div class="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-center">
+                        <div class="text-slate-400 font-bold uppercase text-[10px]">SAM (Mercado Atendible ~30%)</div>
+                        <div class="text-xl font-black text-cyan-400 mt-1" x-text="'$' + (toolTamTopDown * 0.3).toLocaleString()"></div>
+                    </div>
+                    <div class="p-4 rounded-2xl bg-cyan-950/30 border border-cyan-500/30 text-center">
+                        <div class="text-slate-400 font-bold uppercase text-[10px]">SOM (Mercado Objetivo)</div>
+                        <div class="text-xl font-black text-emerald-400 mt-1" x-text="'$' + (toolTamTopDown * 0.3 * (toolTamTargetPct/100)).toLocaleString()"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. Auditador de Cláusulas Term Sheet -->
+    <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto" x-show="showToolTermsheet" style="display: none;">
+        <div class="glass-premium p-8 rounded-3xl max-w-xl w-full text-left">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-black text-white flex items-center gap-2"><span class="text-cyan-400">📜</span> Check Auditoría de Term Sheet</h3>
+                <button @click="showToolTermsheet = false" class="text-slate-400 hover:text-white font-bold text-sm">Cerrar</button>
+            </div>
+            <div class="space-y-3 text-xs text-slate-300">
+                <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex justify-between items-center">
+                    <span>Liquidation Preference (1x Non-Participating recomendado)</span>
+                    <span class="text-emerald-400 font-bold">✔ Estándar</span>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex justify-between items-center">
+                    <span>Anti-dilución Broad-Based Weighted Average</span>
+                    <span class="text-emerald-400 font-bold">✔ Saludable</span>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex justify-between items-center">
+                    <span>Derecho de Arrastre (Drag-Along con supermayoría)</span>
+                    <span class="text-cyan-400 font-bold">ℹ Revisar</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 7. Calculadora ESOP -->
+    <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto" x-show="showToolEsop" style="display: none;">
+        <div class="glass-premium p-8 rounded-3xl max-w-xl w-full text-left">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-black text-white flex items-center gap-2"><span class="text-cyan-400">👥</span> Calculadora Pool de Opciones ESOP</h3>
+                <button @click="showToolEsop = false" class="text-slate-400 hover:text-white font-bold text-sm">Cerrar</button>
+            </div>
+            <div class="space-y-4 text-xs">
+                <div>
+                    <label class="block text-slate-400 font-bold mb-1">Valoración Pre-Money (USD)</label>
+                    <input type="number" x-model.number="toolPreValuation" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white">
+                </div>
+                <div>
+                    <label class="block text-slate-400 font-bold mb-1">Tamaño del Pool ESOP Objetivo (%)</label>
+                    <input type="number" x-model.number="toolEsopPct" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white">
+                </div>
+                <div class="p-4 rounded-2xl bg-cyan-950/30 border border-cyan-500/30 text-center mt-4">
+                    <div class="text-slate-400 font-bold uppercase text-[10px]">Valor Asignado al Pool de Empleados</div>
+                    <div class="text-2xl font-black text-cyan-400 mt-1" x-text="'$' + (toolPreValuation * (toolEsopPct/100)).toLocaleString() + ' USD'"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 8. Simulador Unit Economics CAC/LTV -->
+    <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto" x-show="showToolUnitEcon" style="display: none;">
+        <div class="glass-premium p-8 rounded-3xl max-w-xl w-full text-left">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-black text-white flex items-center gap-2"><span class="text-cyan-400">📈</span> Unit Economics: CAC vs LTV</h3>
+                <button @click="showToolUnitEcon = false" class="text-slate-400 hover:text-white font-bold text-sm">Cerrar</button>
+            </div>
+            <div class="space-y-4 text-xs">
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-slate-400 font-bold mb-1">CAC (USD)</label>
+                        <input type="number" x-model.number="toolCacUsd" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-white">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 font-bold mb-1">ARPU/Mes (USD)</label>
+                        <input type="number" x-model.number="toolArpuUsd" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-white">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 font-bold mb-1">Vida (Meses)</label>
+                        <input type="number" x-model.number="toolLifespanMonths" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-white">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4 mt-4">
+                    <div class="p-4 rounded-2xl bg-cyan-950/30 border border-cyan-500/30 text-center">
+                        <div class="text-slate-400 font-bold uppercase text-[10px]">LTV Calculado</div>
+                        <div class="text-xl font-black text-cyan-400 mt-1" x-text="'$' + (toolArpuUsd * toolLifespanMonths).toLocaleString()"></div>
+                    </div>
+                    <div class="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 text-center">
+                        <div class="text-slate-400 font-bold uppercase text-[10px]">Ratio LTV : CAC</div>
+                        <div class="text-xl font-black text-emerald-400 mt-1" x-text="((toolArpuUsd * toolLifespanMonths) / Math.max(1, toolCacUsd)).toFixed(1) + 'x'"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 9. Script Briefing Audio Builder -->
+    <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto" x-show="showToolAudioScript" style="display: none;">
+        <div class="glass-premium p-8 rounded-3xl max-w-xl w-full text-left">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-black text-white flex items-center gap-2"><span class="text-cyan-400">🎙️</span> Creador de Guión Audio / Podcast IC</h3>
+                <button @click="showToolAudioScript = false" class="text-slate-400 hover:text-white font-bold text-sm">Cerrar</button>
+            </div>
+            <div class="space-y-3 text-xs text-slate-300">
+                <p>Genera un resumen oral sintetizado para escuchar en movilidad antes de las reuniones de comité de inversión.</p>
+                <div class="p-4 bg-slate-900 border border-slate-800 rounded-xl font-mono text-[11px] leading-relaxed text-cyan-300">
+                    "Atención Comité de Inversiones: Presentando informe ejecutivo de VerdictIQ para la startup. Puntuación de preparación: 82/100. Puntos fuertes en tracción de mercado y producto. Banderas rojas en dependencia de clientes B2B."
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 10. Quiz ESG & Cumplimiento -->
+    <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto" x-show="showToolEsgQuiz" style="display: none;">
+        <div class="glass-premium p-8 rounded-3xl max-w-xl w-full text-left">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-black text-white flex items-center gap-2"><span class="text-cyan-400">🛡️</span> Quiz de Cumplimiento Regulatory & ESG</h3>
+                <button @click="showToolEsgQuiz = false" class="text-slate-400 hover:text-white font-bold text-sm">Cerrar</button>
+            </div>
+            <div class="space-y-3 text-xs text-slate-300">
+                <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex justify-between items-center">
+                    <span>1. Política de Privacidad GDPR & SOC2 Type II</span>
+                    <span class="text-emerald-400 font-bold">Cumple</span>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex justify-between items-center">
+                    <span>2. Gobernanza de IA Responsable sin sesgos</span>
+                    <span class="text-yellow-400 font-bold">En revisión</span>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex justify-between items-center">
+                    <span>3. Inclusión y Diversidad en Consejo/Equipo</span>
+                    <span class="text-emerald-400 font-bold">Cumple</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
     <!-- Footer -->
     <footer class="w-full border-t border-slate-900 bg-slate-950/80 backdrop-blur-md py-6 text-center z-10 text-xs text-slate-500 mt-12">
         <div class="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -3618,6 +3948,13 @@ This Term Sheet is non-binding and serves as a framework for drafting definitive
             </div>
         </div>
     </footer>
+
+
+    <!-- Floating Toast Notification -->
+    <div class="fixed bottom-6 left-6 z-50 bg-slate-900 border border-cyan-500/40 text-cyan-300 font-semibold px-5 py-3 rounded-2xl shadow-2xl flex items-center space-x-2 text-xs backdrop-blur-lg" x-show="showToast" x-transition style="display: none;">
+        <span>✨</span>
+        <span x-text="toastMessage"></span>
+    </div>
 
 </body>
 </html>

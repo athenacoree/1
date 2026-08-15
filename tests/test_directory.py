@@ -18,7 +18,7 @@ class TestDirectoryFeatures(unittest.TestCase):
         # Seed initial data
         org = self.db.query(Organization).filter_by(id=1).first()
         if not org:
-            org = Organization(id=1, company_name="DealScout Capital")
+            org = Organization(id=1, company_name="VerdictIQ Capital")
             self.db.add(org)
             self.db.commit()
 

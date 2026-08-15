@@ -18,15 +18,15 @@ class TestNewFeatures(unittest.TestCase):
         # Create/find organization and user
         self.org = self.db.query(Organization).filter_by(id=1).first()
         if not self.org:
-            self.org = Organization(id=1, company_name="DealScout Capital")
+            self.org = Organization(id=1, company_name="VerdictIQ Capital")
             self.db.add(self.org)
             self.db.commit()
 
         # Analyst User
-        self.analyst = self.db.query(User).filter_by(email="analyst@dealscout.ai").first()
+        self.analyst = self.db.query(User).filter_by(email="analyst@verdictiq.ai").first()
         if not self.analyst:
             self.analyst = User(
-                email="analyst@dealscout.ai",
+                email="analyst@verdictiq.ai",
                 hashed_password=hash_password("analystpassword"),
                 role="analista",
                 organization_id=1
@@ -38,10 +38,10 @@ class TestNewFeatures(unittest.TestCase):
             self.db.commit()
 
         # Admin User
-        self.admin = self.db.query(User).filter_by(email="admin_test@dealscout.ai").first()
+        self.admin = self.db.query(User).filter_by(email="admin_test@verdictiq.ai").first()
         if not self.admin:
             self.admin = User(
-                email="admin_test@dealscout.ai",
+                email="admin_test@verdictiq.ai",
                 hashed_password=hash_password("adminpassword"),
                 role="administrador",
                 organization_id=1
@@ -50,8 +50,8 @@ class TestNewFeatures(unittest.TestCase):
             self.db.commit()
 
         # Generate tokens
-        self.analyst_token = create_access_token({"sub": "analyst@dealscout.ai"})
-        self.admin_token = create_access_token({"sub": "admin_test@dealscout.ai"})
+        self.analyst_token = create_access_token({"sub": "analyst@verdictiq.ai"})
+        self.admin_token = create_access_token({"sub": "admin_test@verdictiq.ai"})
 
         # Setup dummy report
         self.report = self.db.query(Report).filter_by(domain="test_features.com", organization_id=1).first()
@@ -413,9 +413,9 @@ class TestNewFeatures(unittest.TestCase):
         self.assertEqual(resp_analyst.status_code, 403)
 
         # 2. Admin tries to update valid key -> 200 Success
-        resp_valid = self.client.post("/admin/config", data={"key": "platform_name", "value": "DealScout Pro"}, headers=admin_headers)
+        resp_valid = self.client.post("/admin/config", data={"key": "platform_name", "value": "VerdictIQ Pro"}, headers=admin_headers)
         self.assertEqual(resp_valid.status_code, 200)
-        self.assertEqual(resp_valid.json()["value"], "DealScout Pro")
+        self.assertEqual(resp_valid.json()["value"], "VerdictIQ Pro")
 
         # 3. Admin tries to update invalid/arbitrary key -> 400 Bad Request
         resp_invalid = self.client.post("/admin/config", data={"key": "arbitrary_evil_key", "value": "hack"}, headers=admin_headers)
