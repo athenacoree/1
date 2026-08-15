@@ -7,13 +7,13 @@ def seed_database():
     session = SessionLocal()
     try:
         # Check if organizations exist, if not create them within same transaction
-        dealscout_org = session.query(Organization).filter_by(company_name="DealScout Capital").first()
+        dealscout_org = session.query(Organization).filter_by(company_name="VerdictIQ Capital").first()
         if not dealscout_org:
-            dealscout_org = Organization(id=1, company_name="DealScout Capital", logo_path=None)
+            dealscout_org = Organization(id=1, company_name="VerdictIQ Capital", logo_path=None)
             session.add(dealscout_org)
-            print("Preparing to seed organization 'DealScout Capital'...")
+            print("Preparing to seed organization 'VerdictIQ Capital'...")
         else:
-            print("'DealScout Capital' already exists")
+            print("'VerdictIQ Capital' already exists")
 
         angel_org = session.query(Organization).filter_by(company_name="Angel Syndicate LLC").first()
         if not angel_org:
@@ -24,29 +24,29 @@ def seed_database():
             print("'Angel Syndicate LLC' already exists")
 
         # Seed Users
-        admin_user = session.query(User).filter_by(email="admin@dealscout.ai").first()
+        admin_user = session.query(User).filter_by(email="admin@verdictiq.ai").first()
         if not admin_user:
             admin_pw = secrets.token_urlsafe(16)
             admin_user = User(
-                email="admin@dealscout.ai",
+                email="admin@verdictiq.ai",
                 hashed_password=hash_password(admin_pw),
                 role="administrador",
                 organization_id=1
             )
             session.add(admin_user)
-            print(f"Seeded admin@dealscout.ai with secure password: {admin_pw}")
+            print(f"Seeded admin@verdictiq.ai with secure password: {admin_pw}")
 
-        analyst_user = session.query(User).filter_by(email="analyst@dealscout.ai").first()
+        analyst_user = session.query(User).filter_by(email="analyst@verdictiq.ai").first()
         if not analyst_user:
             analyst_pw = secrets.token_urlsafe(16)
             analyst_user = User(
-                email="analyst@dealscout.ai",
+                email="analyst@verdictiq.ai",
                 hashed_password=hash_password(analyst_pw),
                 role="analista",
                 organization_id=1
             )
             session.add(analyst_user)
-            print(f"Seeded analyst@dealscout.ai with secure password: {analyst_pw}")
+            print(f"Seeded analyst@verdictiq.ai with secure password: {analyst_pw}")
 
         syndicate_user = session.query(User).filter_by(email="syndicate@angel.co").first()
         if not syndicate_user:

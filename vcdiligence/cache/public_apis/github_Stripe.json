@@ -1,21 +1,21 @@
 {
-  "timestamp": "2026-08-13T16:53:05.237806",
+  "timestamp": "2026-08-14T22:58:45.761953",
   "data": {
     "status": "found",
     "repositories": [
       {
         "name": "juspay/hyperswitch",
         "description": "Open source, composable payments platform | PCI compliant | SaaS and Self-host options | Enables connectivity to multiple payment, payout, fraud, vault and tokenization providers | Uplifts authorization with intelligent routing and revenue recovery | Reduce payment processing costs with cost observability | Reduces payment ops with reconciliation",
-        "stars": 43480,
-        "forks": 5056,
+        "stars": 43486,
+        "forks": 5059,
         "language": "Rust",
         "url": "https://github.com/juspay/hyperswitch"
       },
       {
         "name": "better-auth/better-auth",
         "description": "The most comprehensive authentication framework",
-        "stars": 29531,
-        "forks": 2795,
+        "stars": 29544,
+        "forks": 2800,
         "language": "TypeScript",
         "url": "https://github.com/better-auth/better-auth"
       }

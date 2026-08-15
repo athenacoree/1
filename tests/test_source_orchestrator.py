@@ -75,12 +75,12 @@ class TestSourceOrchestrator(unittest.TestCase):
         from vcdiligence.source_orchestrator import search_founders_and_team
 
         search_results = [
-            {"title": "Marlon Baez Mendez - Founder & CEO - DealScout AI | LinkedIn", "link": "https://www.linkedin.com/in/marlon-baez-mendez?foo=bar", "snippet": "... Marlon is the founder ..."},
-            {"title": "Suresh Beekhani - Co-Founder & CTO - DealScout AI | LinkedIn", "link": "https://www.linkedin.com/in/suresh-beekhani", "snippet": "... Suresh ..."}
+            {"title": "Marlon Baez Mendez - Founder & CEO - VerdictIQ | LinkedIn", "link": "https://www.linkedin.com/in/marlon-baez-mendez?foo=bar", "snippet": "... Marlon is the founder ..."},
+            {"title": "Suresh Beekhani - Co-Founder & CTO - VerdictIQ | LinkedIn", "link": "https://www.linkedin.com/in/suresh-beekhani", "snippet": "... Suresh ..."}
         ]
         scraped_text = "Nuestra empresa fue fundada por Marlon Baez Mendez, CEO y Fundador, y Suresh Beekhani, CTO."
 
-        people = search_founders_and_team("DealScout AI", scraped_text, search_results)
+        people = search_founders_and_team("VerdictIQ", scraped_text, search_results)
 
         self.assertTrue(len(people) >= 2)
         self.assertEqual(people[0]["name"], "Marlon Baez Mendez")

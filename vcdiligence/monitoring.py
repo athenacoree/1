@@ -31,7 +31,7 @@ def send_smtp_alert(subject: str, body: str):
     smtp_port = os.getenv("SMTP_PORT", "587")
     smtp_user = os.getenv("SMTP_USERNAME")
     smtp_pass = os.getenv("SMTP_PASSWORD")
-    smtp_from = os.getenv("SMTP_FROM", "noreply@dealscout.ai")
+    smtp_from = os.getenv("SMTP_FROM", "noreply@verdictiq.ai")
 
     if not smtp_host or not smtp_user or not smtp_pass:
         logger.info("SMTP alert skipped: connection details not configured.")
@@ -276,7 +276,7 @@ def run_continuous_monitoring_job():
                 db.commit()
 
                 # Build consolidated alert message
-                notification_msg = f"🚨 *[DealScout AI] Alerta de Monitoreo para {company_name}* ({r.domain}):\n\n"
+                notification_msg = f"🚨 *[VerdictIQ] Alerta de Monitoreo para {company_name}* ({r.domain}):\n\n"
                 for _, change_desc, _, _ in detected_changes:
                     notification_msg += f"- {change_desc}\n"
                 notification_msg += f"\nVer detalles en tu panel de control."
@@ -285,7 +285,7 @@ def run_continuous_monitoring_job():
                 send_slack_alert(notification_msg)
 
                 # Send email notification
-                email_subject = f"[DealScout AI] Alerta de Cambio Detectado: {company_name}"
+                email_subject = f"[VerdictIQ] Alerta de Cambio Detectado: {company_name}"
                 send_smtp_alert(email_subject, notification_msg)
 
             # Update last monitored timestamp
@@ -321,18 +321,18 @@ def check_listings_expiry(db):
 
     for lst in expiring_listings:
         founder_email = lst.user.email
-        subject = f"⚠️ [DealScout AI] Tu listado de '{lst.visible_name}' está por expirar"
-        renew_url = f"https://dealscout.ai/empresa/{lst.slug}"
+        subject = f"⚠️ [VerdictIQ] Tu listado de '{lst.visible_name}' está por expirar"
+        renew_url = f"https://verdictiq.ai/empresa/{lst.slug}"
         body = (
             f"Hola,\n\n"
-            f"Tu listado para la empresa '{lst.visible_name}' en el directorio de DealScout AI vencerá en menos de 5 días "
+            f"Tu listado para la empresa '{lst.visible_name}' en el directorio de VerdictIQ vencerá en menos de 5 días "
             f"({lst.expires_at.strftime('%Y-%m-%d')}).\n\n"
             f"Si deseas renovarlo por otros 60 días más, puedes hacerlo directamente ingresando a tu panel de control, "
             f"o haciendo clic en tu página pública para renovar:\n"
             f"{renew_url}\n\n"
             f"Si prefieres retirarlo o no respondes, el listado se ocultará automáticamente al expirar.\n\n"
             f"Atentamente,\n"
-            f"El equipo de DealScout AI"
+            f"El equipo de VerdictIQ"
         )
         try:
             send_smtp_alert(subject, body)
@@ -368,13 +368,13 @@ def send_report_ready_email(to_email: str, company_name: str, score: int, pdf_ur
     smtp_port = os.getenv("SMTP_PORT", "587")
     smtp_user = os.getenv("SMTP_USERNAME")
     smtp_pass = os.getenv("SMTP_PASSWORD")
-    smtp_from = os.getenv("SMTP_FROM", "noreply@dealscout.ai")
+    smtp_from = os.getenv("SMTP_FROM", "noreply@verdictiq.ai")
 
     if not smtp_host or not smtp_user or not smtp_pass:
         logger.info("SMTP report ready notification skipped: connection details not configured.")
         return
 
-    subject = f"🚀 [DealScout AI] El reporte de due diligence para {company_name} está listo"
+    subject = f"🚀 [VerdictIQ] El reporte de due diligence para {company_name} está listo"
     body = (
         f"Hola,\n\n"
         f"El análisis de due diligence para la empresa '{company_name}' ha concluido exitosamente.\n\n"
@@ -383,7 +383,7 @@ def send_report_ready_email(to_email: str, company_name: str, score: int, pdf_ur
         f"Puedes descargar el reporte completo en formato PDF utilizando el siguiente enlace:\n"
         f"{pdf_url}\n\n"
         f"Atentamente,\n"
-        f"El equipo de DealScout AI"
+        f"El equipo de VerdictIQ"
     )
 
     try:

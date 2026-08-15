@@ -1,19 +1,19 @@
-# Explicación Detallada del Proyecto: DealScout AI (VCDueDiligenceAgent)
+# Explicación Detallada del Proyecto: VerdictIQ (VCDueDiligenceAgent)
 
-Este documento ha sido actualizado para reflejar la arquitectura de grado empresarial y las mejoras de nivel de producción introducidas en DealScout AI.
+Este documento ha sido actualizado para reflejar la arquitectura de grado empresarial y las mejoras de nivel de producción introducidas en VerdictIQ.
 
 ---
 
 ## 1. Crédito y Licencia (Aviso de Clonación / Bifurcación)
 **Aviso importante sobre el origen del código:**
-DealScout AI se basa en una bifurcación/clon del repositorio original de código abierto **[SURESHBEEKHANI/CrewAI-End-to-End](https://github.com/SURESHBEEKHANI/CrewAI-End-to-End)** bajo licencia MIT. Agradecemos y damos el crédito correspondiente al creador y equipo de desarrollo original por sentar las bases sólidas del MVP de análisis multi-agente.
+VerdictIQ se basa en una bifurcación/clon del repositorio original de código abierto **[SURESHBEEKHANI/CrewAI-End-to-End](https://github.com/SURESHBEEKHANI/CrewAI-End-to-End)** bajo licencia MIT. Agradecemos y damos el crédito correspondiente al creador y equipo de desarrollo original por sentar las bases sólidas del MVP de análisis multi-agente.
 
 Las mejoras de seguridad, autenticación, persistencia relacional, aislamiento de inquilinos (multi-tenancy), scraping defensivo y generación de PDFs marca blanca descritas en este documento son contribuciones empresariales añadidas sobre esa base original.
 
 ---
 
 ## 2. Descripción General del Proyecto
-**DealScout AI** (internamente configurado como `VCDueDiligenceAgent`) es una plataforma SaaS de diligencia debida automatizada para fondos de Venture Capital, aceleradoras y sindicatos de inversión ángel. Permite a los analistas evaluar startups de forma holística a partir de su URL pública, generando reportes de inversión institucionales con puntuaciones de riesgo (0-100), sub-scores por categorías y recomendaciones de inversión claras (GO / CONDITIONAL / NO-GO).
+**VerdictIQ** (internamente configurado como `VCDueDiligenceAgent`) es una plataforma SaaS de diligencia debida automatizada para fondos de Venture Capital, aceleradoras y sindicatos de inversión ángel. Permite a los analistas evaluar startups de forma holística a partir de su URL pública, generando reportes de inversión institucionales con puntuaciones de riesgo (0-100), sub-scores por categorías y recomendaciones de inversión claras (GO / CONDITIONAL / NO-GO).
 
 ---
 
@@ -100,7 +100,7 @@ Para enriquecer la experiencia de usuario y agilizar la diligencia debida, se ha
 4. **Por Subida de Pitch Deck:** Carga directa multipart (`POST /analyze/upload`) de presentaciones en formato PDF o PPTX. Utilizando las bibliotecas ligeras `pypdf` y `python-pptx`, se extrae el texto corporativo de forma instantánea, se detectan enlaces internos mediante expresiones regulares para definir el dominio objetivo y se pasa todo el pitch deck estructurado como contexto enriquecido a la red de agentes de CrewAI.
 
 ## 7. Notificaciones de Finalización por Correo
-Cuando finaliza un análisis en segundo plano, DealScout AI envía automáticamente una notificación de correo por SMTP al usuario (`send_report_ready_email`) detallando el nombre de la startup analizada, el score final de inversión y un enlace directo con token JWT de query parameter para descargar el reporte PDF sin requerir logins manuales recurrentes.
+Cuando finaliza un análisis en segundo plano, VerdictIQ envía automáticamente una notificación de correo por SMTP al usuario (`send_report_ready_email`) detallando el nombre de la startup analizada, el score final de inversión y un enlace directo con token JWT de query parameter para descargar el reporte PDF sin requerir logins manuales recurrentes.
 
 ## 8. Landing Pública, Validación y Funciones de Confianza (Nuevas Características)
 Hemos introducido una suite completa de validación, prueba social y canales directos para dinamizar la fase inicial de lanzamiento:
@@ -117,7 +117,7 @@ Hemos introducido una suite completa de validación, prueba social y canales dir
 ---
 
 ## 9. Directorio de Dos Lados (Fundadores e Inversión) y Modelos de Persistencia
-Hemos expandido DealScout AI para convertirse en un directorio de dos lados altamente estructurado, que conecta a fundadores que buscan capital o están abiertos a adquisición con inversionistas/VCs de todo el mundo. Esta característica se apoya en modelos de base de datos relacionales, flujos avanzados de verificación de cuentas y alertas SMTP automáticas:
+Hemos expandido VerdictIQ para convertirse en un directorio de dos lados altamente estructurado, que conecta a fundadores que buscan capital o están abiertos a adquisición con inversionistas/VCs de todo el mundo. Esta característica se apoya en modelos de base de datos relacionales, flujos avanzados de verificación de cuentas y alertas SMTP automáticas:
 
 ### 1. Modelado de Base de Datos (SQLAlchemy)
 El backend implementa dos tablas relacionales específicas para soportar este flujo de negocio:
@@ -171,7 +171,7 @@ Los listados aprobados expiran automáticamente a los 60 días (ajustable median
 | `SMTP_PORT` | Puerto de conexión SMTP | `587` |
 | `SMTP_USERNAME`| Cuenta/correo emisor para SMTP | Opcional |
 | `SMTP_PASSWORD`| Clave de aplicación/contraseña SMTP | Opcional |
-| `SMTP_FROM`    | Remitente del mensaje de correo | `noreply@dealscout.ai` |
+| `SMTP_FROM`    | Remitente del mensaje de correo | `noreply@verdictiq.ai` |
 
 ---
 
@@ -193,7 +193,7 @@ Los listados aprobados expiran automáticamente a los 60 días (ajustable median
    vcdiligence
    ```
    Abre tu navegador en `http://localhost:10000` e ingresa con:
-   - Email: `analyst@dealscout.ai`
+   - Email: `analyst@verdictiq.ai`
    - Password: `analystpassword`
 
 ---
@@ -240,7 +240,7 @@ El archivo `source_orchestrator.py` introduce un motor de orquestación reactivo
 
 ## 12. Innovación en Eficiencia Cognitiva: El Nuevo Diseño de Agentes Estructurados y Ahorro de Tokens
 
-En las versiones iniciales de DealScout AI, cada uno de los agentes especialistas de CrewAI (por ejemplo, el de investigación de mercado o de análisis competitivo) redactaba un extenso reporte de texto libre con miles de palabras y conectores literarios. Luego, estos extensos reportes se inyectaban en la secuencia como contexto para los siguientes agentes.
+En las versiones iniciales de VerdictIQ, cada uno de los agentes especialistas de CrewAI (por ejemplo, el de investigación de mercado o de análisis competitivo) redactaba un extenso reporte de texto libre con miles de palabras y conectores literarios. Luego, estos extensos reportes se inyectaban en la secuencia como contexto para los siguientes agentes.
 
 Esto causaba un grave problema de eficiencia técnica conocido como **"inflación de contexto"**:
 1. **Redundancia:** Los LLM consumen gran cantidad de tokens para escribir frases complementarias y adornos literarios ("En conclusión", "Considerando lo anterior", etc.).

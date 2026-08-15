@@ -18,14 +18,14 @@ class TestAppEndpoints(unittest.TestCase):
         # Ensure test organization and users exist
         org = self.db.query(Organization).filter_by(id=1).first()
         if not org:
-            org = Organization(id=1, company_name="DealScout Capital")
+            org = Organization(id=1, company_name="VerdictIQ Capital")
             self.db.add(org)
             self.db.commit()
 
-        user = self.db.query(User).filter_by(email="analyst@dealscout.ai").first()
+        user = self.db.query(User).filter_by(email="analyst@verdictiq.ai").first()
         if not user:
             user = User(
-                email="analyst@dealscout.ai",
+                email="analyst@verdictiq.ai",
                 hashed_password=hash_password("analystpassword"),
                 role="analista",
                 organization_id=1
@@ -49,11 +49,11 @@ class TestAppEndpoints(unittest.TestCase):
     def test_index_page(self):
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, 200)
-        self.assertIn("DealScout AI", resp.text)
+        self.assertIn("VerdictIQ", resp.text)
 
     def test_login_success(self):
         resp = self.client.post("/login", json={
-            "email": "analyst@dealscout.ai",
+            "email": "analyst@verdictiq.ai",
             "password": "analystpassword"
         })
         self.assertEqual(resp.status_code, 200)
@@ -62,7 +62,7 @@ class TestAppEndpoints(unittest.TestCase):
 
     def test_login_failure(self):
         resp = self.client.post("/login", json={
-            "email": "analyst@dealscout.ai",
+            "email": "analyst@verdictiq.ai",
             "password": "wrongpassword"
         })
         self.assertEqual(resp.status_code, 401)
@@ -70,7 +70,7 @@ class TestAppEndpoints(unittest.TestCase):
     def test_ssrf_blocked(self):
         # Authenticate first
         login_resp = self.client.post("/login", json={
-            "email": "analyst@dealscout.ai",
+            "email": "analyst@verdictiq.ai",
             "password": "analystpassword"
         })
         token = login_resp.json()["access_token"]
@@ -84,7 +84,7 @@ class TestAppEndpoints(unittest.TestCase):
     def test_pdf_download_with_query_token(self):
         # Authenticate
         login_resp = self.client.post("/login", json={
-            "email": "analyst@dealscout.ai",
+            "email": "analyst@verdictiq.ai",
             "password": "analystpassword"
         })
         token = login_resp.json()["access_token"]
