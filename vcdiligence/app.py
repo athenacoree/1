@@ -1212,11 +1212,51 @@ def upload_and_analyze(
 def get_status(task_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
     Get status of task. Enforce tenant isolation.
+    If task record doesn't exist yet, check if a completed Report exists for this domain
+    and dynamically create/return the completed status.
     Now also includes partial_sections for section-by-section real-time updates.
     """
     task = db.query(Task).filter_by(id=task_id).first()
     if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+        # Extract domain from task_id format ({org_id}_{domain}) if possible
+        parts = task_id.split("_", 1)
+        domain_candidate = parts[1] if len(parts) > 1 else task_id
+
+        # Check if completed report exists for user's organization
+        existing_report = db.query(Report).filter_by(
+            domain=domain_candidate,
+            organization_id=current_user.organization_id
+        ).first()
+
+        if existing_report:
+            cached_result = {
+                "company_name": existing_report.company_name,
+                "domain": domain_candidate,
+                "company_url": existing_report.url,
+                "score": existing_report.score,
+                "sub_scores": existing_report.sub_scores,
+                "recommendation": existing_report.recommendation,
+                "report_md": existing_report.report_md,
+                "llm_provider": existing_report.llm_provider,
+                "pdf_path": f"/reports/{domain_candidate}/pdf",
+                "screenshot_gallery": existing_report.screenshot_gallery,
+                "hype_qa": existing_report.hype_qa,
+                "created_at": existing_report.created_at.isoformat() if existing_report.created_at else None
+            }
+            task = Task(
+                id=task_id,
+                domain=domain_candidate,
+                status="completed",
+                progress=100,
+                message="Loaded report from database.",
+                result_json=cached_result,
+                hype_qa=existing_report.hype_qa,
+                organization_id=current_user.organization_id
+            )
+            db.add(task)
+            db.commit()
+        else:
+            raise HTTPException(status_code=404, detail="Task or report not found")
 
     if task.organization_id != current_user.organization_id:
         raise HTTPException(status_code=403, detail="Access denied")
