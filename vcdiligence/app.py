@@ -185,23 +185,41 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
         if referrer:
             referred_by_id = referrer.id
 
-    # Create Organization or map to default
-    org_id = 1 # default is VerdictIQ Capital
-    if req.account_type == "empresa" and req.company_name:
-        # Create a new organization for white-labeling
-        new_org = Organization(company_name=req.company_name)
-        db.add(new_org)
-        db.commit()
-        db.refresh(new_org)
-        org_id = new_org.id
-    elif req.account_type == "personal":
-        # Create a unique organization for personal accounts to isolate reports and search history
-        org_name = req.company_name or f"Personal Organization - {req.email}"
-        new_org = Organization(company_name=org_name)
-        db.add(new_org)
-        db.commit()
-        db.refresh(new_org)
-        org_id = new_org.id
+    # Create or find Organization based on account_type
+    org_id = 1
+    try:
+        clean_company = req.company_name.strip() if req.company_name else None
+
+        if req.account_type == "empresa":
+            company_name = clean_company or f"Company Organization - {req.email}"
+            org = db.query(Organization).filter_by(company_name=company_name).first()
+            if not org:
+                org = Organization(company_name=company_name)
+                db.add(org)
+                db.commit()
+                db.refresh(org)
+            org_id = org.id
+        elif req.account_type == "personal":
+            # For personal accounts, ensure organization name is unique to the user email
+            if clean_company:
+                org_name = f"Personal - {clean_company} ({req.email})"
+            else:
+                org_name = f"Personal Organization - {req.email}"
+            org = db.query(Organization).filter_by(company_name=org_name).first()
+            if not org:
+                org = Organization(company_name=org_name)
+                db.add(org)
+                db.commit()
+                db.refresh(org)
+            org_id = org.id
+        else:
+            default_org = db.query(Organization).filter_by(id=1).first()
+            if default_org:
+                org_id = default_org.id
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error handling organization in /register: {str(e)}")
+        raise HTTPException(status_code=400, detail="Error creating or linking organization.")
 
     # Generate unique referral code
     unique_ref = str(uuid.uuid4())[:8].upper()
@@ -220,8 +238,13 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
         referred_by_id=referred_by_id
     )
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    try:
+        db.commit()
+        db.refresh(user)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating user in /register: {str(e)}")
+        raise HTTPException(status_code=400, detail="Error creating user account.")
 
     # Perform automatic domain verification if company website is provided and it's a company account
     if req.account_type == "empresa" and req.email and req.company_website:
@@ -707,6 +730,12 @@ def update_settings(
                 detail="Modifying organization name is restricted to administrators."
             )
         else:
+            existing_org = db.query(Organization).filter_by(company_name=company_name).first()
+            if existing_org and existing_org.id != org.id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="An organization with this name already exists."
+                )
             org.company_name = company_name
 
     if logo and current_user.role == "administrador":
