@@ -83,7 +83,7 @@ def check_rate_limit(organization_id: int, db: Session, limit: int = 5, window_m
     if os.getenv("TESTING") or "unittest" in sys.modules:
         return
 
-    since_time = datetime.datetime.utcnow() - datetime.timedelta(minutes=window_minutes)
+    since_time = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) - datetime.timedelta(minutes=window_minutes)
     count = db.query(func.count(AuditLog.id)).filter(
         AuditLog.organization_id == organization_id,
         AuditLog.action == "analyze_startup",

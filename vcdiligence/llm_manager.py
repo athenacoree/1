@@ -33,7 +33,7 @@ class LLMProviderManager:
 
             if key_record:
                 # Update last_used_at
-                key_record.last_used_at = datetime.datetime.utcnow()
+                key_record.last_used_at = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                 db_session.commit()
 
                 # Instantiate LLM

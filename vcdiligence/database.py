@@ -25,13 +25,16 @@ else:
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+def utc_now():
+    return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+
 class Organization(Base):
     __tablename__ = "organizations"
 
     id = Column(Integer, primary_key=True, index=True)
     company_name = Column(String, unique=True, index=True, nullable=False)
     logo_path = Column(String, nullable=True) # For white-label custom logo
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     users = relationship("User", back_populates="organization", cascade="all, delete-orphan")
     reports = relationship("Report", back_populates="organization", cascade="all, delete-orphan")
@@ -45,7 +48,7 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     role = Column(String, default="analista", nullable=False) # "analista" or "administrador"
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     # Added fields for validation, landing, and referral
     account_type = Column(String, default="personal", nullable=False) # "personal" or "empresa"
@@ -75,7 +78,7 @@ class Testimonial(Base):
     share_name = Column(Boolean, default=False, nullable=False)
     screenshot_path = Column(String, nullable=True)
     is_approved = Column(Boolean, default=False, nullable=False) # screenshot needs manual approval, text comments auto-approve
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     user = relationship("User")
 
@@ -87,7 +90,7 @@ class ErrorReport(Base):
     description = Column(Text, nullable=False)
     url = Column(String, nullable=True)
     screenshot_path = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     user = relationship("User")
 
@@ -107,7 +110,7 @@ class Report(Base):
     screenshot_gallery = Column(JSON, nullable=True)
     hype_qa = Column(JSON, nullable=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     # Monitoring configuration columns
     monitoring_enabled = Column(Boolean, default=False, nullable=False)
@@ -127,7 +130,7 @@ class ReportChange(Base):
     description = Column(Text, nullable=False)
     old_value = Column(Text, nullable=True)
     new_value = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     report = relationship("Report", back_populates="changes")
 
@@ -141,7 +144,7 @@ class Decision(Base):
     decision = Column(String, nullable=False) # "invertimos", "pasamos", "en_evaluacion"
     notas = Column(Text, nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+    timestamp = Column(DateTime, default=utc_now)
 
     report = relationship("Report")
     organization = relationship("Organization")
@@ -158,7 +161,7 @@ class PrecisionBenchmark(Base):
     recommendation = Column(String, nullable=True)
     known_outcome = Column(String, nullable=False) # "success", "failure", "acquisition"
     matched = Column(Boolean, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 class Task(Base):
     __tablename__ = "tasks"
@@ -173,7 +176,7 @@ class Task(Base):
     hype_qa = Column(JSON, nullable=True)
     language = Column(String, default="es", nullable=False)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     organization = relationship("Organization", back_populates="tasks")
 
@@ -186,7 +189,7 @@ class AuditLog(Base):
     organization_id = Column(Integer, nullable=True)
     action = Column(String, nullable=False) # e.g. "analyze_startup", "view_report", "delete_report"
     target_company = Column(String, nullable=True)
-    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+    timestamp = Column(DateTime, default=utc_now)
 
 class CompanyListing(Base):
     __tablename__ = "company_listings"
@@ -205,7 +208,7 @@ class CompanyListing(Base):
     show_numerical_score = Column(Boolean, default=False, nullable=False)
 
     status = Column(String, default="pending_review", nullable=False) # "pending_review", "approved", "rejected"
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     approved_at = Column(DateTime, nullable=True)
     expires_at = Column(DateTime, nullable=True)
 
@@ -218,7 +221,7 @@ class ListingInterest(Base):
     id = Column(Integer, primary_key=True, index=True)
     listing_id = Column(Integer, ForeignKey("company_listings.id"), nullable=False)
     vc_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     listing = relationship("CompanyListing")
     vc_user = relationship("User")
@@ -234,7 +237,7 @@ class ApiKeyPool(Base):
     consecutive_failures = Column(Integer, default=0, nullable=False)
     last_used_at = Column(DateTime, nullable=True)
     last_failure_reason = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
 
 class PricingPlan(Base):
     __tablename__ = "pricing_plans"
@@ -247,7 +250,7 @@ class PricingPlan(Base):
     credits_included = Column(Integer, nullable=True)  # only for credit_bundle
     is_active = Column(Boolean, default=False, nullable=False)
     allowed_providers = Column(JSON, default=list, nullable=False)  # e.g., ["stripe", "crypto"]
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
 
 class UserWallet(Base):
     __tablename__ = "user_wallets"
@@ -270,7 +273,7 @@ class PaymentTransaction(Base):
     external_transaction_id = Column(String, nullable=True)
     amount_cents = Column(Integer, nullable=False)
     status = Column(String, default="pending", nullable=False)  # "pending", "completed", "failed", "refunded"
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
     completed_at = Column(DateTime, nullable=True)
 
     user = relationship("User")
@@ -287,7 +290,7 @@ class TokenUsageLog(Base):
     prompt_tokens = Column(Integer, default=0, nullable=False)
     completion_tokens = Column(Integer, default=0, nullable=False)
     total_tokens = Column(Integer, default=0, nullable=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
 
 class SystemConfig(Base):
     __tablename__ = "system_configs"
@@ -304,7 +307,7 @@ class ScreenshotCache(Base):
     id = Column(Integer, primary_key=True, index=True)
     url = Column(String, index=True, nullable=False)
     screenshot_url = Column(String, nullable=False)
-    captured_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    captured_at = Column(DateTime, default=utc_now, nullable=False)
 
 def init_db():
     import os

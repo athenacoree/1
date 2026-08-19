@@ -15,7 +15,7 @@ def capture_screenshot(url: str, db_session=None) -> str | None:
     if db_session:
         try:
             from vcdiligence.database import ScreenshotCache
-            thirty_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+            thirty_days_ago = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) - datetime.timedelta(days=30)
             cached = db_session.query(ScreenshotCache).filter(
                 ScreenshotCache.url == url,
                 ScreenshotCache.captured_at >= thirty_days_ago

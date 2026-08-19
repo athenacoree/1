@@ -40,8 +40,9 @@ class TestLLMProviderManager(unittest.TestCase):
 
     def test_get_llm_from_pool_rotation(self):
         # Insert keys into pool
-        key1 = ApiKeyPool(provider="openrouter", api_key="sk-pool-key1", is_active=True, status="healthy", last_used_at=datetime.datetime.utcnow() - datetime.timedelta(minutes=10))
-        key2 = ApiKeyPool(provider="openrouter", api_key="sk-pool-key2", is_active=True, status="healthy", last_used_at=datetime.datetime.utcnow() - datetime.timedelta(minutes=20))
+        now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+        key1 = ApiKeyPool(provider="openrouter", api_key="sk-pool-key1", is_active=True, status="healthy", last_used_at=now - datetime.timedelta(minutes=10))
+        key2 = ApiKeyPool(provider="openrouter", api_key="sk-pool-key2", is_active=True, status="healthy", last_used_at=now - datetime.timedelta(minutes=20))
         key3 = ApiKeyPool(provider="openrouter", api_key="sk-pool-key3", is_active=True, status="healthy", last_used_at=None) # No last_used_at sorts first
         self.db.add_all([key1, key2, key3])
         self.db.commit()

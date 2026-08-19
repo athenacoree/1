@@ -49,7 +49,7 @@ class CircuitBreaker:
     def check(cls, source_name: str) -> bool:
         """Returns True if the source is active (not paused), False otherwise."""
         paused_time = cls.paused_until.get(source_name)
-        if paused_time and datetime.datetime.utcnow() < paused_time:
+        if paused_time and datetime.datetime.now(datetime.timezone.utc) < paused_time:
             return False
         return True
 
@@ -61,7 +61,7 @@ class CircuitBreaker:
     def record_failure(cls, source_name: str):
         cls.consecutive_failures[source_name] = cls.consecutive_failures.get(source_name, 0) + 1
         if cls.consecutive_failures[source_name] >= 3:
-            cls.paused_until[source_name] = datetime.datetime.utcnow() + datetime.timedelta(hours=2)
+            cls.paused_until[source_name] = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=2)
             logger.warning(f"Circuit breaker triggered for '{source_name}'. Pausing execution for 2 hours.")
 
 def run_orchestrated_analysis(
