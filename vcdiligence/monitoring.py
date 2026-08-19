@@ -82,7 +82,7 @@ def run_continuous_monitoring_job():
 
         for r in reports:
             # Check frequency window
-            now = datetime.datetime.utcnow()
+            now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
             last_checked = r.last_monitored_at or r.created_at
             elapsed_days = (now - last_checked).total_seconds() / 86400.0
             if elapsed_days < r.monitoring_interval_days:
@@ -289,7 +289,7 @@ def run_continuous_monitoring_job():
                 send_smtp_alert(email_subject, notification_msg)
 
             # Update last monitored timestamp
-            r.last_monitored_at = datetime.datetime.utcnow()
+            r.last_monitored_at = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
             db.commit()
 
         # Check and warn listings about expiry
@@ -309,7 +309,7 @@ def check_listings_expiry(db):
     from vcdiligence.database import CompanyListing
     from vcdiligence.logging_config import logger
 
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     warning_window = now + datetime.timedelta(days=5)
 
     # Find active approved listings expiring in the next 5 days

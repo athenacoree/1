@@ -20,7 +20,9 @@ def get_cached_response(api_name: str, query: str, ttl_hours: int = 24) -> dict:
             with open(cache_path, "r", encoding="utf-8") as f:
                 cached = json.load(f)
                 timestamp = datetime.datetime.fromisoformat(cached["timestamp"])
-                if datetime.datetime.utcnow() - timestamp < datetime.timedelta(hours=ttl_hours):
+                if timestamp.tzinfo is None:
+                    timestamp = timestamp.replace(tzinfo=datetime.timezone.utc)
+                if datetime.datetime.now(datetime.timezone.utc) - timestamp < datetime.timedelta(hours=ttl_hours):
                     return cached["data"]
         except Exception:
             pass
@@ -33,7 +35,7 @@ def set_cached_response(api_name: str, query: str, data: dict, ttl_hours: int = 
     try:
         with open(cache_path, "w", encoding="utf-8") as f:
             json.dump({
-                "timestamp": datetime.datetime.utcnow().isoformat(),
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "data": data
             }, f, indent=2, ensure_ascii=False)
     except Exception as e:

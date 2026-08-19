@@ -4,6 +4,7 @@ import json
 import socket
 import datetime
 import threading
+from contextlib import asynccontextmanager
 from typing import Optional
 from fastapi import FastAPI, Depends, BackgroundTasks, HTTPException, status, File, UploadFile, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
@@ -30,34 +31,12 @@ from vcdiligence.pdf_generator import generate_report_pdf
 from vcdiligence.crew import MarketResearchCrew
 from vcdiligence.tasks import run_due_diligence_task
 
-app = FastAPI(title="VerdictIQ — Enterprise Due Diligence")
-
-# Enable CORS for easier client integration
-allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:10000")
-allowed_origins = [orig.strip() for orig in allowed_origins_env.split(",") if orig.strip()]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Custom Global Exception Handler to prevent raw tracebacks in response
-@app.exception_handler(Exception)
-def global_exception_handler(request, exc):
-    logger.error(f"Unhandled exception on {request.url.path}: {str(exc)}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "An internal server error occurred. Please contact system administrator."}
-    )
-
-# Cleanup hung/active tasks on startup & start Scheduler
-@app.on_event("startup")
-def on_startup():
+# Cleanup hung/active tasks on startup & start Scheduler via Lifespan
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     init_db()
     db = SessionLocal()
+    scheduler = None
     try:
         # Cleanup hung tasks on server startup unconditionally (Celery is replaced by BackgroundTasks)
         hung_tasks = db.query(Task).filter(Task.status.in_(["starting", "scraping", "analyzing"])).all()
@@ -88,6 +67,34 @@ def on_startup():
         logger.error(f"Error during startup initialization: {str(e)}")
     finally:
         db.close()
+
+    yield
+
+    if scheduler and scheduler.running:
+        scheduler.shutdown()
+
+app = FastAPI(title="VerdictIQ — Enterprise Due Diligence", lifespan=lifespan)
+
+# Enable CORS for easier client integration
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:10000")
+allowed_origins = [orig.strip() for orig in allowed_origins_env.split(",") if orig.strip()]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Custom Global Exception Handler to prevent raw tracebacks in response
+@app.exception_handler(Exception)
+def global_exception_handler(request, exc):
+    logger.error(f"Unhandled exception on {request.url.path}: {str(exc)}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An internal server error occurred. Please contact system administrator."}
+    )
 
 import uuid
 from vcdiligence.database import Testimonial, ErrorReport
@@ -875,7 +882,7 @@ def start_analysis(
     # Credit/Subscription validation if payments system is enabled
     if is_payments_enabled(db):
         wallet = db.query(UserWallet).filter_by(user_id=current_user.id).with_for_update().first()
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
         has_sub = wallet and wallet.subscription_active and wallet.subscription_expires_at and wallet.subscription_expires_at > now
         has_credit = wallet and wallet.credits_balance >= 1
 
@@ -1156,7 +1163,7 @@ def upload_and_analyze(
     # Credit/Subscription validation if payments system is enabled
     if is_payments_enabled(db):
         wallet = db.query(UserWallet).filter_by(user_id=current_user.id).first()
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
         has_sub = wallet and wallet.subscription_active and wallet.subscription_expires_at and wallet.subscription_expires_at > now
         has_credit = wallet and wallet.credits_balance >= 1
 
@@ -1865,7 +1872,7 @@ def register_decision(
         dec.decision = req.decision
         dec.notas = req.notas
         dec.user_id = current_user.id
-        dec.timestamp = datetime.datetime.utcnow()
+        dec.timestamp = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     db.commit()
 
     # Record Audit Log
@@ -2083,7 +2090,7 @@ def list_public_listings(
     Supports filters: industry, country, category, min_score.
     Includes simple pagination.
     """
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     query = db.query(CompanyListing).join(Report, CompanyListing.report_id == Report.id).filter(
         CompanyListing.status == "approved",
         CompanyListing.expires_at > now
@@ -2178,7 +2185,7 @@ def approve_listing(
 
     if approve:
         expiry_days = int(os.getenv("LISTING_EXPIRY_DAYS", "60"))
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
         listing.status = "approved"
         listing.approved_at = now
         listing.expires_at = now + datetime.timedelta(days=expiry_days)
@@ -2209,7 +2216,7 @@ def renew_listing(id: int, current_user: User = Depends(get_current_user), db: S
         raise HTTPException(status_code=403, detail="You do not own this listing")
 
     expiry_days = int(os.getenv("LISTING_EXPIRY_DAYS", "60"))
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     # Renew for another 60 days from now, and set status back to approved if it was hidden/expired
     listing.expires_at = now + datetime.timedelta(days=expiry_days)
     if listing.status == "rejected":
@@ -2237,7 +2244,7 @@ def view_individual_listing(slug: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Startup not found")
 
     # Only show approved, non-expired listings publicly, UNLESS it's an admin or the owner (we'll keep it simple: publicly only approved & non-expired)
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     is_active = (listing.status == "approved" and listing.expires_at and listing.expires_at > now)
     if not is_active:
          raise HTTPException(status_code=403, detail="This listing is currently inactive or under review")
@@ -2517,12 +2524,12 @@ def get_token_usage_stats(current_user: User = Depends(require_admin), db: Sessi
     from vcdiligence.database import TokenUsageLog
 
     # 1. Daily usage (last 30 days)
-    start_date = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+    start_date = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) - datetime.timedelta(days=30)
     logs = db.query(TokenUsageLog).filter(TokenUsageLog.created_at >= start_date).all()
 
     daily_data = {}
     for i in range(30):
-        d_str = (datetime.datetime.utcnow() - datetime.timedelta(days=i)).strftime("%Y-%m-%d")
+        d_str = (datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) - datetime.timedelta(days=i)).strftime("%Y-%m-%d")
         daily_data[d_str] = 0
 
     for log in logs:
@@ -2682,7 +2689,7 @@ def complete_transaction_and_apply_benefits(db: Session, transaction: PaymentTra
         return
 
     transaction.status = "completed"
-    transaction.completed_at = datetime.datetime.utcnow()
+    transaction.completed_at = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
 
     # Find or create UserWallet
     wallet = db.query(UserWallet).filter_by(user_id=transaction.user_id).with_for_update().first()
@@ -2696,7 +2703,7 @@ def complete_transaction_and_apply_benefits(db: Session, transaction: PaymentTra
         logger.info(f"Credited {plan.credits_included} credits to user {transaction.user_id}. New balance: {wallet.credits_balance}")
     elif plan.plan_type == "subscription_monthly":
         wallet.subscription_active = True
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
         if wallet.subscription_expires_at and wallet.subscription_expires_at > now:
             wallet.subscription_expires_at += datetime.timedelta(days=30)
         else:

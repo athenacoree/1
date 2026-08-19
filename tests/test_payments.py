@@ -118,7 +118,7 @@ class TestPaymentsAndCredits(unittest.TestCase):
         self.db.add(cfg)
 
         # 2. Setup subscription expiring in 10 days, and 5 credits
-        expires = datetime.datetime.utcnow() + datetime.timedelta(days=10)
+        expires = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) + datetime.timedelta(days=10)
         wallet = UserWallet(user_id=self.user.id, credits_balance=5, subscription_active=True, subscription_expires_at=expires)
         self.db.add(wallet)
         self.db.commit()

@@ -159,9 +159,9 @@ class TestDirectoryFeatures(unittest.TestCase):
             visible_description="Old edtech startup",
             show_numerical_score=False,
             status="approved",
-            created_at=datetime.datetime.utcnow() - datetime.timedelta(days=70),
-            approved_at=datetime.datetime.utcnow() - datetime.timedelta(days=70),
-            expires_at=datetime.datetime.utcnow() - datetime.timedelta(days=10) # 10 days ago expired
+            created_at=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) - datetime.timedelta(days=70),
+            approved_at=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) - datetime.timedelta(days=70),
+            expires_at=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) - datetime.timedelta(days=10) # 10 days ago expired
         )
         self.db.add(listing)
         self.db.commit()
@@ -201,9 +201,9 @@ class TestDirectoryFeatures(unittest.TestCase):
             visible_description="AI robotics",
             show_numerical_score=True,
             status="approved",
-            created_at=datetime.datetime.utcnow(),
-            approved_at=datetime.datetime.utcnow(),
-            expires_at=datetime.datetime.utcnow() + datetime.timedelta(days=60)
+            created_at=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
+            approved_at=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
+            expires_at=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) + datetime.timedelta(days=60)
         )
         self.db.add(listing)
         self.db.commit()
@@ -245,9 +245,9 @@ class TestDirectoryFeatures(unittest.TestCase):
             visible_description="AI robotics",
             show_numerical_score=True,
             status="approved",
-            created_at=datetime.datetime.utcnow(),
-            approved_at=datetime.datetime.utcnow(),
-            expires_at=datetime.datetime.utcnow() + datetime.timedelta(days=60)
+            created_at=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
+            approved_at=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
+            expires_at=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) + datetime.timedelta(days=60)
         )
         self.db.add(listing)
         self.db.commit()

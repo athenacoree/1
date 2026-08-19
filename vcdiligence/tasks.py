@@ -400,7 +400,7 @@ def run_due_diligence_task(
             "pdf_path": f"/reports/{domain}/pdf",
             "screenshot_gallery": screenshot_gallery,
             "hype_qa": hype_qa_data,
-            "created_at": datetime.datetime.utcnow().isoformat()
+            "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
         }
 
         task = db.query(Task).filter_by(id=f"{org_id}_{domain}").first()
